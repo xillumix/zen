@@ -2189,7 +2189,7 @@ static int64_t nTimeCallbacks = 0;
 static int64_t nTimeTotal = 0;
 
 // ZEN_MOD_START
-bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex, CCoinsViewCache& view, const CChain& chain, bool fJustCheck)
+bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex, CCoinsViewCache& view, const CChain& chain, bool fJustCheck, bool fScriptChecks)
 // ZEN_MOD_END
 {
     const CChainParams& chainparams = Params();
@@ -2202,7 +2202,10 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             // This block is an ancestor of a checkpoint: disable script checks
             fExpensiveChecks = false;            
         }
-    }    
+    }
+    if(fJustCheck){
+    	fExpensiveChecks = fScriptChecks;
+    }
 
     auto verifier = libzcash::ProofVerifier::Strict();
     auto disabledVerifier = libzcash::ProofVerifier::Disabled();
@@ -3504,7 +3507,7 @@ bool ProcessNewBlock(CValidationState &state, CNode* pfrom, CBlock* pblock, bool
     return true;
 }
 
-bool TestBlockValidity(CValidationState &state, const CBlock& block, CBlockIndex * const pindexPrev, bool fCheckPOW, bool fCheckMerkleRoot)
+bool TestBlockValidity(CValidationState &state, const CBlock& block, CBlockIndex * const pindexPrev, bool fCheckPOW, bool fCheckMerkleRoot, bool fScriptChecks)
 {
     AssertLockHeld(cs_main);
     assert(pindexPrev == chainActive.Tip());
@@ -3524,7 +3527,7 @@ bool TestBlockValidity(CValidationState &state, const CBlock& block, CBlockIndex
     if (!ContextualCheckBlock(block, state, pindexPrev))
         return false;
 // ZEN_MOD_START
-    if (!ConnectBlock(block, state, &indexDummy, viewNew, chainActive, true))
+    if (!ConnectBlock(block, state, &indexDummy, viewNew, chainActive, true, fScriptChecks))
 // ZEN_MOD_END
         return false;
     assert(state.IsValid());

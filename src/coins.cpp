@@ -440,6 +440,7 @@ bool CCoinsViewCache::HaveInputs(const CTransaction& tx) const
     return true;
 }
 
+
 double CCoinsViewCache::GetPriority(const CTransaction &tx, int nHeight) const
 {
     if (tx.IsCoinBase())
