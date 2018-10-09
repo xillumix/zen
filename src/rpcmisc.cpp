@@ -465,3 +465,57 @@ UniValue setmocktime(const UniValue& params, bool fHelp)
 
     return NullUniValue;
 }
+
+UniValue zen_transactioninfo(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "zen_transactioninfo \"txid\"\n"
+            "\nReturn information about the max delay chain.\n"
+            "\nArguments:\n"
+            "1. \"txid\"     (string, required) The transaction id\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"txid\" : \"id\",        			(string) The transaction id (same as provided)\n"
+        	"  \"tx_block_hash\" : \"hash\",        (string) The mined block hash with the tx\n"
+        	"  \"tx_block_height\" : \"int\",       (int) The mined block height with the tx\n"
+        	"  \"chain_height\" : \"int\",        	(int) The current chain height\n"
+        	"  \"chain_delay\" : \"boolean\",        (boolean) true|false if there is chain under penalty\n"
+        	"  \"block_delay\" : \"int\",        	(int) The current delay of the chain under penalty\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("zen_transactioninfo", "\"mytxid\"")
+        );
+
+
+#ifdef ENABLE_WALLET
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+#else
+    LOCK(cs_main);
+#endif
+    uint256 hash = ParseHashV(params[0], "parameter 1");
+    uint256 hashBlock;
+    int txHeight;
+
+    int delay = GetTransactionAndDelayInfo(hash, txHeight, hashBlock);
+
+    if (delay == -1) {
+    	throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "No information available about transaction");
+    }
+    if (delay == -2) {
+        	throw JSONRPCError(RPC_INVALID_REQUEST, "The transaction is not yet mined");
+    }
+
+    UniValue ret(UniValue::VOBJ);
+    ret.push_back(Pair("txid", hash.GetHex()));
+    ret.push_back(Pair("tx_block_hash", hashBlock.GetHex()));
+    ret.push_back(Pair("tx_block_height", txHeight));
+    ret.push_back(Pair("chain_height", chainActive.Height()));
+    if (delay > 0) {
+	   ret.push_back(Pair("chain_delay", true));
+	   ret.push_back(Pair("block_delay", delay));
+    } else {
+ 	   ret.push_back(Pair("chain_delay", false));
+    }
+    return ret;
+}

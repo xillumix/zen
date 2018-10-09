@@ -1364,6 +1364,53 @@ bool GetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock
     return false;
 }
 
+/** Return the ... */
+int GetTransactionAndDelayInfo(const uint256 &hash, int &txHeight, uint256 &txHashBlock)
+{
+    CBlockIndex *pindexConfirmed = NULL;
+
+    LOCK(cs_main);
+
+    CBlockIndex *pi = NULL;
+
+    CTransaction txOut;
+    if (mempool.lookup(hash, txOut))
+    {
+        return -2;
+    }
+
+	int nHeight = -1;
+	{
+		CCoinsViewCache &view = *pcoinsTip;
+		const CCoins* coins = view.AccessCoins(hash);
+		if (coins)
+			nHeight = coins->nHeight;
+	}
+
+	if (nHeight > 0) {
+		txHeight = nHeight;
+		int maxDelay = 0;
+		for ( auto it = setBlockIndexCandidates.begin(); it != setBlockIndexCandidates.end(); it++ ) {
+		    	 pi = *it;
+		    	 // LogPrintf("block hash: %s  -- chain delay: %d \n", pi->GetBlockHash().ToString() , pi->nChainDelay);
+		    	 if (pi->nChainDelay > maxDelay) {
+		    		 maxDelay = pi->nChainDelay;
+		    	 }
+		}
+		pindexConfirmed = chainActive[nHeight];
+		CBlock block;
+		if (ReadBlockFromDisk(block, pindexConfirmed)) {
+			BOOST_FOREACH(const CTransaction &tx, block.vtx){
+			if (tx.GetHash() == hash) {
+					txOut = tx;
+					txHashBlock = pindexConfirmed->GetBlockHash();
+					return maxDelay;
+				}
+			}
+		}
+	}
+    return -1;
+}
 
 
 
