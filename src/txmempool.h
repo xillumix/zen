@@ -8,6 +8,8 @@
 
 #include <list>
 
+#include "addressindex.h"
+#include "spentindex.h"
 #include "amount.h"
 #include "coins.h"
 #include "primitives/transaction.h"
@@ -133,6 +135,19 @@ private:
     std::map<uint256, const CTransaction*> mapSaplingNullifiers;
 
     void checkNullifiers(ShieldedType type) const;
+
+private:
+    typedef std::map<CMempoolAddressDeltaKey, CMempoolAddressDelta, CMempoolAddressDeltaKeyCompare> addressDeltaMap;
+    addressDeltaMap mapAddress;
+
+    typedef std::map<uint256, std::vector<CMempoolAddressDeltaKey> > addressDeltaMapInserted;
+    addressDeltaMapInserted mapAddressInserted;
+
+    typedef std::map<CSpentIndexKey, CSpentIndexValue, CSpentIndexKeyCompare> mapSpentIndex;
+    mapSpentIndex mapSpent;
+
+    typedef std::map<uint256, std::vector<CSpentIndexKey> > mapSpentIndexInserted;
+    mapSpentIndexInserted mapSpentInserted;
     
 public:
     typedef boost::multi_index_container<
@@ -166,6 +181,16 @@ public:
     void setSanityCheck(double dFrequency = 1.0) { nCheckFrequency = static_cast<uint32_t>(dFrequency * 4294967295.0); }
 
     bool addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry, bool fCurrentEstimate = true);
+
+    void addAddressIndex(const CTxMemPoolEntry &entry, const CCoinsViewCache &view);
+    bool getAddressIndex(std::vector<std::pair<uint160, int> > &addresses,
+                         std::vector<std::pair<CMempoolAddressDeltaKey, CMempoolAddressDelta> > &results);
+    bool removeAddressIndex(const uint256 txhash);
+
+    void addSpentIndex(const CTxMemPoolEntry &entry, const CCoinsViewCache &view);
+    bool getSpentIndex(CSpentIndexKey &key, CSpentIndexValue &value);
+    bool removeSpentIndex(const uint256 txhash);
+
     void remove(const CTransaction &tx, std::list<CTransaction>& removed, bool fRecursive = false);
     void removeWithAnchor(const uint256 &invalidRoot, ShieldedType type);
     void removeForReorg(const CCoinsViewCache *pcoins, unsigned int nMemPoolHeight, int flags);
