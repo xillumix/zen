@@ -13,6 +13,7 @@ from test_framework.util import *
 from test_framework.script import *
 from test_framework.mininode import *
 import binascii
+import json
 
 class TxIndexTest(BitcoinTestFramework):
 
@@ -37,18 +38,20 @@ class TxIndexTest(BitcoinTestFramework):
 
     def run_test(self):
         print "Mining blocks..."
-        self.nodes[0].generate(105)
+        h = 105
+        self.nodes[0].generate(h)
         self.sync_all()
 
         chain_height = self.nodes[1].getblockcount()
-        assert_equal(chain_height, 105)
+        assert_equal(chain_height, h)
+        cblockh = str(self.nodes[0].getblock('0')['hash'])
 
         print "Testing transaction index..."
 
         privkey = "cSdkPxkAjA4HDr5VHgsebAPDEh9Gyub4HK8UJr2DFGGqKKy4K5sG"
         address = "mgY65WSfEmsyYaYPQaXhmXMeBhwp4EcsQW"
         addressHash = "0b2f0a0c31bfe0406b0ccc1381fdbe311946dadc".decode("hex")
-        scriptPubKey = CScript([OP_DUP, OP_HASH160, addressHash, OP_EQUALVERIFY, OP_CHECKSIG])
+        scriptPubKey = CScript([OP_DUP, OP_HASH160, addressHash, OP_EQUALVERIFY, OP_CHECKSIG, cblockh])
         unspent = self.nodes[0].listunspent()
         tx = CTransaction()
         amount = unspent[0]["amount"] * 100000000
@@ -63,8 +66,8 @@ class TxIndexTest(BitcoinTestFramework):
 
         # Check verbose raw transaction results
         verbose = self.nodes[3].getrawtransaction(unspent[0]["txid"], 1)
-        assert_equal(verbose["vout"][0]["valueSat"], 5000000000);
-        assert_equal(verbose["vout"][0]["value"], 50);
+        assert_equal(verbose["vout"][0]["valueSat"], 1143750000);
+        assert_equal(verbose["vout"][0]["value"], 11.4375);
 
         print "Passed\n"
 
