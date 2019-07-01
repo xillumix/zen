@@ -162,6 +162,12 @@ public:
                             //   total number of tx / (checkpoint block height / (24 * 24))
         };
 
+
+        nSproutValuePoolCheckpointHeight = 0;
+        nSproutValuePoolCheckpointBalance = 0;
+        fZIP209Enabled = true;
+        hashSproutValuePoolCheckpointBlock = uint256S("0");
+
 //  commented out - seems to make no sense but kept around for reference just in case
 //        assert(vCommunityFundAddress.size() <= consensus.GetLastCommunityRewardBlockHeight());
     }
@@ -243,6 +249,11 @@ public:
         fRequireStandard = true;
         fMineBlocksOnDemand = false;
         fTestnetToBeDeprecatedFieldRPC = true;
+
+        nSproutValuePoolCheckpointHeight = 0;
+        nSproutValuePoolCheckpointBalance = 0;
+        fZIP209Enabled = true;
+        hashSproutValuePoolCheckpointBlock = uint256S("0");
 
         checkpointData = (CCheckpointData) {
             boost::assign::map_list_of
@@ -331,6 +342,11 @@ public:
 //  commented out - seems to make no sense but kept around for reference just in case
 //        assert(vCommunityFundAddress.size() <= consensus.GetLastCommunityRewardBlockHeight());
     }
+
+    void SetRegTestZIP209Enabled() {
+        fZIP209Enabled = true;
+    }
+
 };
 static CRegTestParams regTestParams;
 
@@ -364,6 +380,9 @@ void SelectParams(CBaseChainParams::Network network) {
         regTestParams.SetRegTestCoinbaseMustBeProtected();
     }
     ForkManager::getInstance().selectNetwork(network);
+    if (network == CBaseChainParams::REGTEST && mapArgs.count("-developersetpoolsizezero")) {
+        regTestParams.SetRegTestZIP209Enabled();
+    }
 }
 
 bool SelectParamsFromCommandLine()

@@ -862,6 +862,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         else if (mapArgs.count("-paymentdisclosure")) {
             return InitError(_("Payment disclosure requires -experimentalfeatures."));
         }
+        else if (mapArgs.count("-developersetpoolsizezero")) {
+        	return InitError(_("Setting the size of shielded pools to zero requires -experimentalfeatures."));
+        }
+
     }
 
     // Set this early so that parameter interactions go to console
