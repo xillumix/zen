@@ -197,10 +197,8 @@ public:
         vFixedSeeds.clear();
         vSeeds.clear();
 
-        vSeeds.push_back(CDNSSeedData("horizen.global", "dnsseed.testnet.horizen.global"));
-        vSeeds.push_back(CDNSSeedData("blockoperations.com", "zpool2.blockoperations.com"));
-        vSeeds.push_back(CDNSSeedData("scottrockcafe.com", "node.scottrockcafe.com"));
-        vSeeds.push_back(CDNSSeedData("horizen.global", "testnet.horizen.global"));
+        vSeeds.push_back(CDNSSeedData("sidechains-testnet.horizen.global", "dnsseed.sidechains-testnet.horizen.global")); //dns seeder
+        vSeeds.push_back(CDNSSeedData("horizen.global", "sidechains-testnet.horizen.global")); //fixed seeds, 4 nodes
 
         // guarantees the first 2 characters, when base58 encoded, are "zt"
         // guarantees the first 2 characters, when base58 encoded, are "tm"
