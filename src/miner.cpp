@@ -39,6 +39,8 @@
 #include <functional>
 #endif
 #include <mutex>
+#include "sc/sidechain.h"
+static Sidechain::ScMgr& scMgr = Sidechain::ScMgr::instance();
 
 using namespace std;
 
@@ -117,7 +119,9 @@ void GetBlockTxPriorityData(const CBlock *pblock, int nHeight, int64_t nMedianTi
                 : pblock->GetBlockTime();
 
         if (tx.IsCoinBase() || !IsFinalTx(tx, nHeight, nLockTimeCutoff))
+        {
             continue;
+        }
 
         COrphan* porphan = NULL;
         double dPriority = 0;
@@ -396,7 +400,11 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
             CAmount nFeeDelta = 0;
             mempool.ApplyDeltas(hash, dPriorityDelta, nFeeDelta);
             if (fSortedByFee && (dPriorityDelta <= 0) && (nFeeDelta <= 0) && (feeRate < ::minRelayTxFee) && (nBlockSize + nTxSize >= nBlockMinSize))
+            {
+                LogPrint("sc", "%s():%d - Skipping tx[%s] because it is free (feeDelta=%lld/feeRate=%s)\n",
+                    __func__, __LINE__, tx.GetHash().ToString(), nFeeDelta, feeRate.ToString() );
                 continue;
+            }
 
             // Prioritise by fee once past the priority size or we run out of high-priority
             // transactions:
@@ -416,16 +424,27 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
             if (!view.HaveInputs(tx))
                 continue;
 
+            // skip transactions that send forward crosschain amounts if the creation of the target sidechain is
+            // not yet in blockchain. This should happen only if a chain has been reverted and a mix of creation/transfers
+            // has been placed back in the mem pool The skipped tx will be mined in the next block if the scid is found
+
+            if (!scMgr.IsTxApplicableToState(tx) )
+            {
+                LogPrint("sc", "%s():%d - tx=%s is not applicable, skipping it...\n", __func__, __LINE__, tx.GetHash().ToString() );
+                continue;
+            }
+
             CAmount nTxFees = view.GetValueIn(tx)-tx.GetValueOut();
 
             nTxSigOps += GetP2SHSigOpCount(tx, view);
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
                 continue;
 
+            CValidationState state;
+    
             // Note that flags: we don't want to set mempool/IsStandard()
             // policy here, but we still have to ensure that the block we
             // create only contains transactions that are valid in new blocks.
-            CValidationState state;
             if (!ContextualCheckInputs(tx, state, view, true, chainActive, MANDATORY_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_CHECKBLOCKATHEIGHT, true, Params().GetConsensus()))
                 continue;
 
@@ -503,7 +522,7 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
 
         // Fill in header
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
-        pblock->hashReserved   = uint256();
+        pblock->hashScMerkleRootsMap   = uint256();
         UpdateTime(pblock, Params().GetConsensus(), pindexPrev);
         pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock, Params().GetConsensus());
         pblock->nSolution.clear();
@@ -583,6 +602,11 @@ void IncrementExtraNonce(CBlock* pblock, CBlockIndex* pindexPrev, unsigned int& 
 
     pblock->vtx[0] = txCoinbase;
     pblock->hashMerkleRoot = pblock->BuildMerkleTree();
+    pblock->hashScMerkleRootsMap = pblock->BuildScMerkleRootsMap();
+#ifdef DEBUG_SC_HASH
+    std::cout << "-------------------------------------------" << std::endl;
+    std::cout << "      ScMerkleRootMap: " << pblock->hashScMerkleRootsMap.ToString() << std::endl;
+#endif
 }
 
 #ifdef ENABLE_WALLET

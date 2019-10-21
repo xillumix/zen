@@ -66,6 +66,9 @@
 
 #include "librustzcash.h"
 
+#include "zen/websocket_server.h"
+#include "sc/sidechain.h"
+
 using namespace std;
 
 extern void ThreadSendAlert();
@@ -191,6 +194,7 @@ void Shutdown()
     RenameThread("zcash-shutoff");
     mempool.AddTransactionsUpdated(1);
 
+    StopWsServer();
     StopHTTPRPC();
     StopREST();
     StopRPC();
@@ -464,8 +468,8 @@ std::string HelpMessage(HelpMessageMode mode)
         strUsage += HelpMessageOpt("-flushwallet", strprintf("Run a thread to flush wallet periodically (default: %u)", 1));
         strUsage += HelpMessageOpt("-stopafterblockimport", strprintf("Stop running after importing blocks from disk (default: %u)", 0));
     }
-    string debugCategories = "addrman, alert, bench, coindb, db, estimatefee, http, libevent, lock, mempool, net, partitioncheck, pow, proxy, prune, "
-                             "rand, reindex, rpc, selectcoins, tor, zmq, zrpc, zrpcunsafe (implies zrpc)"; // Don't translate these
+    string debugCategories = "addrman, alert, bench, coindb, db, estimatefee, fork, http, libevent, lock, mempool, net, partitioncheck, pow, proxy, prune, "
+                             "rand, reindex, rpc, sc, selectcoins, tor, ws, zmq, zrpc, zrpcunsafe (implies zrpc)"; // Don't translate these
     strUsage += HelpMessageOpt("-debug=<category>", strprintf(_("Output debugging information (default: %u, supplying <category> is optional)"), 0) + ". " +
         _("If <category> is not supplied or if <category> = 1, output all debugging information.") + " " + _("<category> can be:") + " " + debugCategories + ".");
     strUsage += HelpMessageOpt("-experimentalfeatures", _("Enable use of experimental features"));
@@ -793,6 +797,8 @@ bool AppInitServers(boost::thread_group& threadGroup)
     if (GetBoolArg("-rest", false) && !StartREST())
         return false;
     if (!StartHTTPServer())
+        return false;
+    if (GetBoolArg("-websocket", false) && !StartWsServer())
         return false;
     return true;
 }
@@ -1422,6 +1428,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     int64_t nTotalCache = (GetArg("-dbcache", nDefaultDbCache) << 20);
     nTotalCache = std::max(nTotalCache, nMinDbCache << 20); // total cache cannot be less than nMinDbCache
     nTotalCache = std::min(nTotalCache, nMaxDbCache << 20); // total cache cannot be greated than nMaxDbcache
+    int64_t nSideChainDBCache = nTotalCache / 32;
+    nTotalCache -= nSideChainDBCache;
     int64_t nBlockTreeDBCache = nTotalCache / 8;
     if (nBlockTreeDBCache > (1 << 21) && !GetBoolArg("-txindex", false))
         nBlockTreeDBCache = (1 << 21); // block tree db cache shouldn't be larger than 2 MiB
@@ -1433,6 +1441,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     LogPrintf("* Using %.1fMiB for block index database\n", nBlockTreeDBCache * (1.0 / 1024 / 1024));
     LogPrintf("* Using %.1fMiB for chain state database\n", nCoinDBCache * (1.0 / 1024 / 1024));
     LogPrintf("* Using %.1fMiB for in-memory UTXO set\n", nCoinCacheUsage * (1.0 / 1024 / 1024));
+    LogPrintf("* Using %.1fMiB for sidechain database\n", nSideChainDBCache * (1.0 / 1024 / 1024));
 
     bool fLoaded = false;
     while (!fLoaded) {
@@ -1464,6 +1473,13 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
                 if (!LoadBlockIndex()) {
                     strLoadError = _("Error loading block database");
+                    break;
+                }
+
+                // open sidechain db, read data and populate memory objects
+                if (!Sidechain::ScMgr::instance().initialUpdateFromDb((size_t)nSideChainDBCache, fReindex) )
+                {
+                    strLoadError = _("Error loading sidechain database");
                     break;
                 }
 
@@ -1584,8 +1600,15 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 strErrors << _("Error loading wallet.dat: Wallet corrupted") << "\n";
             else if (nLoadWalletRet == DB_NONCRITICAL_ERROR)
             {
-                string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
+                string msg(_("error reading wallet.dat! All keys read correctly, but transaction data"
                              " or address book entries might be missing or incorrect."));
+
+                bool reindexing = false;
+                pblocktree->ReadReindexing(reindexing);
+                if (reindexing)
+                {
+                    msg = string(_("(Reindexing in progress...) ")) + msg;
+                }
                 InitWarning(msg);
             }
             else if (nLoadWalletRet == DB_TOO_NEW)
