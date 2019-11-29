@@ -29,12 +29,15 @@ struct CBlockTemplate
 
 class CCoinsViewCache;
 class COrphan;
-typedef boost::tuple<double, CFeeRate, const CTransaction*> TxPriority;
+typedef boost::tuple<double, CFeeRate, const CTransactionBase*> TxPriority;
 /** Retrieve mempool transactions priority info */
 void GetBlockTxPriorityData(const CBlock *pblock, int nHeight, int64_t nMedianTimePast, const CCoinsViewCache& view,
                                std::vector<TxPriority>& vecPriority, std::list<COrphan>& vOrphan, std::map<uint256, std::vector<COrphan*> >& mapDependers);
 /** DEPRECATED. Retrieve mempool transactions priority info */
 void GetBlockTxPriorityDataOld(const CBlock *pblock, int nHeight, int64_t nMedianTimePast, const CCoinsViewCache& view,
+                               std::vector<TxPriority>& vecPriority, std::list<COrphan>& vOrphan, std::map<uint256, std::vector<COrphan*> >& mapDependers);
+
+void GetBlockCertPriorityData(const CBlock *pblock, int nHeight, int64_t nMedianTimePast, const CCoinsViewCache& view,
                                std::vector<TxPriority>& vecPriority, std::list<COrphan>& vOrphan, std::map<uint256, std::vector<COrphan*> >& mapDependers);
 
 /** Generate a new block, without valid proof-of-work */

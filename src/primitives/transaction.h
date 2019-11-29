@@ -25,6 +25,8 @@
 #include "utilstrencodings.h"
 #include "hash.h"
 
+#include "consensus/params.h"
+
 // uncomment for debugging some sc related hashing calculations
 //#define DEBUG_SC_HASH 1
 
@@ -262,7 +264,7 @@ public:
     uint32_t n;
 
     BaseOutPoint() { SetNull(); }
-    BaseOutPoint(uint256 hashIn, uint32_t nIn) { hash = hashIn; n = nIn; }
+    BaseOutPoint(uint256 hashIn, uint32_t nIn): hash(hashIn), n(nIn) {}
 
     ADD_SERIALIZE_METHODS;
 
@@ -616,18 +618,120 @@ public:
     }
 };
 
+// forward declarations
+class CValidationState;
+class CTxMemPool;
+class CCoinsViewCache;
+class CChain;
+class CBlock;
+class CScriptCheck;
+class CBlockUndo;
 
+
+// abstract interface for CTransaction and CScCertificate
+class CTransactionBase
+{
+protected:
+    /** Memory only. */
+    const uint256 hash;
+
+    // this must be implemented by derived classes
+    virtual void UpdateHash() const = 0;
+
+public:
+    const int32_t nVersion;
+    const std::vector<CTxOut> vout;
+
+    /** Construct a CTransactionBase that qualifies as IsNull() */
+    CTransactionBase();
+    CTransactionBase& operator=(const CTransactionBase& tx);
+    virtual ~CTransactionBase() {};
+
+    template <typename Stream>
+    CTransactionBase(deserialize_type, Stream& s) : CTransactionBase(CMutableTransactionBase(deserialize, s)) {}
+
+    virtual bool IsNull() const = 0;
+
+    const uint256& GetHash() const {
+        return hash;
+    }
+
+    // Return sum of txouts.
+    virtual CAmount GetValueOut() const = 0;
+    // return fee amount
+    virtual CAmount GetFeeAmount(CAmount valueIn) const = 0;
+
+    // return sum of txins, and needs CCoinsViewCache, because
+    // inputs must be known to compute value in.
+    virtual CAmount GetValueIn(const CCoinsViewCache& view) const = 0;
+
+    virtual bool IsCoinBase() const = 0;
+
+    friend bool operator==(const CTransactionBase& a, const CTransactionBase& b)
+    {
+        return a.hash == b.hash;
+    }
+
+    friend bool operator!=(const CTransactionBase& a, const CTransactionBase& b)
+    {
+        return a.hash != b.hash;
+    }
+
+    // Compute priority, given priority of inputs and (optionally) tx size
+    double ComputePriority(double dPriorityInputs, unsigned int nTxSize=0) const;
+
+    // return false when meaningful only in a block context. As of now only tx coin base returns false
+    virtual bool IsValidLoose() const { return true; }
+
+    // Compute tx size
+    virtual unsigned int CalculateSize() const = 0;
+
+    // Compute modified tx size for priority calculation (optionally given tx size)
+    virtual unsigned int CalculateModifiedSize(unsigned int nTxSize=0) const = 0;
+
+    virtual std::string ToString() const = 0;
+
+    virtual void AddToBlock(CBlock* pblock) const = 0;
+
+    // default values for derived classes not supporting CTransaction specific data structures
+    // Return sum of JoinSplit vpub_new if supported
+    virtual CAmount GetJoinSplitValueIn() const { return 0; };
+    virtual bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const { return true; };
+    virtual void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const { return; };
+    virtual bool HaveInputs(const CCoinsViewCache& view) const { return true; };
+    virtual void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const { return; }
+    virtual void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const { return; }
+    virtual bool AreInputsStandard(CCoinsViewCache& view) const { return true; };
+    virtual unsigned int GetP2SHSigOpCount(CCoinsViewCache& view) const { return 0; }
+    virtual unsigned int GetLegacySigOpCount() const { return 0; }
+    virtual CAmount GetValueCcOut() const { return 0; };
+    virtual size_t getVjoinsplitSize() const { return 0; };
+    virtual int GetComplexity() const { return 0; }
+
+    virtual int GetNumbOfInputs() const { return 0; }
+    virtual bool CheckInputsLimit(size_t limit, size_t& n) const { return true; }
+    virtual bool Check(CValidationState& state, libzcash::ProofVerifier& verifier) const = 0;
+    virtual bool ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const = 0;
+    virtual bool IsStandard(std::string& reason, int nHeight) const = 0;
+    virtual bool CheckFinal(int flags) const = 0;
+    virtual bool IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const = 0;
+    virtual bool HasNoInputsInMempool(const CTxMemPool& pool) const = 0;
+    virtual bool IsApplicableToState() const = 0;
+    virtual bool ContextualCheckInputs(CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
+       const CChain& chain, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams,
+       std::vector<CScriptCheck> *pvChecks = NULL) const = 0;
+    virtual void SyncWithWallets(const CBlock* pblock = NULL) const = 0;
+    virtual bool CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const = 0;
+    virtual double GetPriority(const CCoinsViewCache &view, int nHeight) const = 0;
+};
 
 struct CMutableTransaction;
 
 /** The basic transaction that is broadcasted on the network and contained in
  * blocks.  A transaction can contain multiple inputs and outputs.
  */
-class CTransaction
+class CTransaction : public CTransactionBase
 {
-private:
-    /** Memory only. */
-    const uint256 hash;
     void UpdateHash() const;
 
 public:
@@ -645,9 +749,7 @@ public:
     // actually immutable; deserialization and assignment are implemented,
     // and bypass the constness. This is safe, as they update the entire
     // structure, including the hash.
-    const int32_t nVersion;
     const std::vector<CTxIn> vin;
-    const std::vector<CTxOut> vout;
     const std::vector<CTxScCreationOut> vsc_ccout;
     const std::vector<CTxCertifierLockOut> vcl_ccout;
     const std::vector<CTxForwardTransferOut> vft_ccout;
@@ -692,11 +794,20 @@ public:
     }
     template <typename Stream>
     CTransaction(deserialize_type, Stream& s) : CTransaction(CMutableTransaction(deserialize, s)) {}
-
+    
     bool IsScVersion() const
     {
         // so far just one version
         return (nVersion == SC_TX_VERSION);
+    }
+
+    bool IsValidLoose() const override;
+    unsigned int CalculateSize() const override;
+    unsigned int CalculateModifiedSize(unsigned int nTxSize) const override;
+
+    bool IsCoinBase() const
+    {
+        return (vin.size() == 1 && vin[0].prevout.IsNull());
     }
 
     bool IsNull() const {
@@ -715,43 +826,20 @@ public:
             vft_ccout.empty()
         );
     }
-    const uint256& GetHash() const {
-        return hash;
-    }
-
+    
     // Return sum of txouts.
     CAmount GetValueOut() const;
+    // Return sum of tx ins
+    CAmount GetValueIn(const CCoinsViewCache& view) const;
+    // value in should be computed via the method above using a proper coin view
+    CAmount GetFeeAmount(CAmount valueIn) const { return (valueIn - GetValueOut() ); }
 
     // Return sum of txccouts.
     CAmount GetValueCertifierLockCcOut() const;
     CAmount GetValueForwardTransferCcOut() const;
 
-    // GetValueIn() is a method on CCoinsViewCache, because
-    // inputs must be known to compute value in.
-
-    // Return sum of JoinSplit vpub_new
-    CAmount GetJoinSplitValueIn() const;
-
-    // Compute priority, given priority of inputs and (optionally) tx size
-    double ComputePriority(double dPriorityInputs, unsigned int nTxSize=0) const;
-
-    // Compute modified tx size for priority calculation (optionally given tx size)
-    unsigned int CalculateModifiedSize(unsigned int nTxSize=0) const;
-
-    bool IsCoinBase() const
-    {
-        return (vin.size() == 1 && vin[0].prevout.IsNull());
-    }
-
-    friend bool operator==(const CTransaction& a, const CTransaction& b)
-    {
-        return a.hash == b.hash;
-    }
-
-    friend bool operator!=(const CTransaction& a, const CTransaction& b)
-    {
-        return a.hash != b.hash;
-    }
+    size_t getVjoinsplitSize() const { return vjoinsplit.size(); };
+    int GetComplexity() const { return vin.size()*vin.size(); }
 
     std::string ToString() const;
 
@@ -819,14 +907,54 @@ public:
             nIdx++;
         }
     }
+
+  public:
+    void AddToBlock(CBlock* pblock) const;
+    CAmount GetJoinSplitValueIn() const;
+    int GetNumbOfInputs() const;
+    bool CheckInputsLimit(size_t limit, size_t& n) const;
+    bool Check(CValidationState& state, libzcash::ProofVerifier& verifier) const;
+    bool ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const;
+    bool IsStandard(std::string& reason, int nHeight) const;
+    bool CheckFinal(int flags) const;
+    bool IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const;
+    bool HasNoInputsInMempool(const CTxMemPool& pool) const;
+    bool IsApplicableToState() const;
+    bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const;
+    void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const;
+    bool HaveInputs(const CCoinsViewCache& view) const;
+    void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const;
+    void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const;
+    bool AreInputsStandard(CCoinsViewCache& view) const;
+    unsigned int GetP2SHSigOpCount(CCoinsViewCache& view) const;
+    unsigned int GetLegacySigOpCount() const;
+    bool ContextualCheckInputs(CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
+                           const CChain& chain, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams,
+                           std::vector<CScriptCheck> *pvChecks = NULL) const;
+    void SyncWithWallets(const CBlock* pblock = NULL) const;
+    bool CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const;
+    double GetPriority(const CCoinsViewCache &view, int nHeight) const;
 };
 
-/** A mutable version of CTransaction. */
-struct CMutableTransaction
+/** A mutable hierarchy version of CTransaction. */
+struct CMutableTransactionBase
 {
     int32_t nVersion;
-    std::vector<CTxIn> vin;
     std::vector<CTxOut> vout;
+
+    CMutableTransactionBase();
+    virtual ~CMutableTransactionBase() {};
+
+    /** Compute the hash of this CMutableTransaction. This is computed on the
+     * fly, as opposed to GetHash() in CTransaction, which uses a cached result.
+     */
+    virtual uint256 GetHash() const = 0;
+};
+
+
+struct CMutableTransaction : public CMutableTransactionBase
+{
+    std::vector<CTxIn> vin;
     std::vector<CTxScCreationOut> vsc_ccout;
     std::vector<CTxCertifierLockOut> vcl_ccout;
     std::vector<CTxForwardTransferOut> vft_ccout;
@@ -837,6 +965,7 @@ struct CMutableTransaction
 
     CMutableTransaction();
     CMutableTransaction(const CTransaction& tx);
+    operator CTransaction() { return CTransaction(*this); }
 
     ADD_SERIALIZE_METHODS;
 

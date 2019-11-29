@@ -44,6 +44,7 @@ using namespace std;
 using namespace libzcash;
 using namespace Sidechain;
 
+extern CTxMemPool mempool;
 extern UniValue TxJoinSplitToJSON(const CTransaction& tx);
 
 int64_t nWalletUnlockTime;
@@ -3997,6 +3998,166 @@ UniValue sc_sendmany(const UniValue& params, bool fHelp)
     ScHandleTransaction(wtx, vecSend, nTotalOut);
 
     return wtx.GetHash().GetHex();
+}
+
+UniValue sc_bwdtr(const UniValue& params, bool fHelp)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 2)
+        throw runtime_error(
+            "sc_bwdtr scid [{\"address\":... ,\"amount\":...},...]\n"
+            "\nSend cross chain backward transfers as a certificate."
+            "\nArguments:\n"
+            "scid                     (string, required) The uint256 side chain ID\n"
+            "amounts:                 (array, required) An array of json objects representing the amounts to send.\n"
+            "    [{\n"                     
+            "      \"address\":address  (string, required) The address is a taddr or zaddr\n"
+            "      \"amount\":amount    (numeric, required) The numeric amount in " + CURRENCY_UNIT + "\n"
+            "    }, ... ]\n"
+            "\nResult:\n"
+            "\"certificateId\"          (string) The resulting tx id containing the certificate.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("sc_bwdtr", "\"ea3e7ccbfd40c4e2304c4215f76d204e4de63c578ad835510f580d529516a874\" '[{\"address\": \"ztU36Ee2qAtyqskmi4PcBkZZiPBquR7ZYAR\" ,\"amount\": 5.0}]'")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // side chain id
+    string inputString = params[0].get_str();
+    if (inputString.find_first_not_of("0123456789abcdefABCDEF", 0) != std::string::npos)
+        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid scid format: not an hex");
+
+    uint256 scId;
+    scId.SetHex(inputString);
+
+    // sanity check of the side chain ID
+    if (!ScMgr::instance().sidechainExists(scId) )
+    {
+        LogPrint("sc", "scid[%s] does not exists \n", scId.ToString() );
+        throw JSONRPCError(RPC_INVALID_PARAMETER, string("scid not exists: ") + scId.ToString());
+    }
+
+    UniValue outputs = params[1].get_array();
+
+    if (outputs.size()==0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, output array is empty.");
+
+    // Recipients
+    CAmount nTotalOut = 0;
+    vector<CcRecipientVariant> vecSend;
+
+    for (const UniValue& o : outputs.getValues())
+    {
+        if (!o.isObject())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected object");
+
+        // sanity check, report error if unknown key-value pairs
+        for (const string& s : o.getKeys())
+        {
+            if (s != "address" && s != "amount")
+                throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown key: ") + s);
+        }
+
+        string address = find_value(o, "address").get_str();
+        CBitcoinAddress taddr(address);
+        if (!taddr.IsValid()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ")+address );
+        }
+
+        UniValue av = find_value(o, "amount");
+        CAmount nAmount = AmountFromValue( av );
+        if (nAmount <= 0)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, amount must be positive");
+
+        CRecipientBackwardTransfer bt;
+        bt.scriptPubKey = GetScriptForDestination(taddr.Get());
+        bt.nValue = nAmount;
+
+        vecSend.push_back(CcRecipientVariant(bt));
+
+        nTotalOut += nAmount;
+    }
+
+    EnsureWalletIsUnlocked();
+
+    std::string strFailReason;
+
+    CMutableScCertificate cert;
+    // cert data
+    cert.totalAmount = nTotalOut;
+    cert.nVersion = SC_TX_VERSION;
+    cert.scId = scId;
+    cert.nonce = uint256(GetRandHash() );
+
+#if 0
+// no vin in certificatres, think differently
+    // Fill vin with sort of coinbase
+    cert.vin.resize(1);
+    cert.vin[0].prevout.SetNull();
+    // in order to avoid potential non-unique tx hash, add a nonce
+    uint256 h(GetRandHash() );
+    cert.vin[0].scriptSig = CScript() << chainActive.Height() << ToByteVector(h) << OP_0;        
+#endif
+    
+    // vout - TODO fee will be carved out from amounts
+    unsigned int nSubtractFeeFromAmount = vecSend.size();
+
+    BOOST_FOREACH (const auto& ccRecipient, vecSend)
+    {
+        CRecipientHandler handler(&cert, strFailReason);
+        if (!handler.visit(ccRecipient) )
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strFailReason );
+        }
+    }
+
+    // deduce fee (TODO see how it works for tx in wallet.cpp)
+    unsigned int nBytes = ::GetSerializeSize(cert, SER_NETWORK, PROTOCOL_VERSION);
+    CAmount nFeeRet = CWallet::GetMinimumFee(nBytes, DEFAULT_TX_CONFIRM_TARGET, mempool);
+    LogPrint("cert", "%s():%d - fee=%s\n", __func__, __LINE__, FormatMoney(nFeeRet));
+    bool fFirst = true;
+
+    BOOST_FOREACH (auto& out, cert.vout)
+    {
+        out.nValue -= nFeeRet / nSubtractFeeFromAmount; // Subtract fee equally from each selected recipient
+ 
+        if (fFirst) // first receiver pays the remainder not divisible by output count
+        {
+            fFirst = false;
+            out.nValue -= nFeeRet % nSubtractFeeFromAmount;
+        }
+ 
+        if (out.IsDust(::minRelayTxFee))
+        {
+            if (nFeeRet > 0)
+            {
+                if (out.nValue < 0)
+                    strFailReason = _("The transaction amount is too small to pay the fee");
+                else
+                    strFailReason = _("The transaction amount is too small to send after the fee has been deducted");
+            }
+            else
+            {
+                strFailReason = _("Transaction amount too small");
+            }
+            return false;
+        }
+    }
+
+    CScCertificate constCert(cert);
+    constCert.GetHash();
+
+    std::string encStr = EncodeHexCert(constCert);
+    UniValue inputVal = UniValue(UniValue::VARR);
+    inputVal.push_back(encStr);
+    UniValue sendResultValue = sendrawcertificate(inputVal, false);
+    if (sendResultValue.isNull()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "sendrawcertificate did not return an error or a certificate id.");
+    }
+
+    return sendResultValue.get_str();
 }
 
 UniValue sc_certlock_many(const UniValue& params, bool fHelp)

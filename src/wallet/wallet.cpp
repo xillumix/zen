@@ -2725,24 +2725,12 @@ bool CWallet::CreateTransaction(
                 // vccouts to the payees
                 BOOST_FOREACH (const auto& ccRecipient, vecCcSend)
                 {
-                    CRecipientFactory fac(&txNew, strFailReason);
-                    if (!fac.set(ccRecipient) )
+                    CRecipientHandler handler(&txNew, strFailReason);
+                    if (!handler.visit(ccRecipient) )
                     {
                         return false;
                     }
                 }
-
-/*
- * this check has moved before adding to mem pool
- *
- *              // if this tx creates a sc, check that no other tx are doing the same in the mempool
- *              CValidationState state;
- *              if (!ScMgr::instance().IsTxAllowedInMempool(mempool, txNew, state) )
- *              {
- *                  strFailReason = _("Sc already created by a tx in mempool");
- *                  return false;
- *              }
- */
 
                 // Choose coins to use
                 set<pair<const CWalletTx*,unsigned int> > setCoins;
@@ -3823,51 +3811,3 @@ void CWallet::GetFilteredNotes(std::vector<CNotePlaintextEntry> & outEntries, st
         }
     }
 }
-
-//--------------------------------------------------------------------------------------------
-// Cross chain outputs
-
-template <typename T>
-bool CcRecipientVisitor::operator() (const T& r) const { return fact->set(r); }
-
-bool CRecipientFactory::set(const CRecipientScCreation& r)
-{
-    CTxScCreationOut txccout(r.scId, r.creationData.withdrawalEpochLength);
-    // no dust can be found in sc creation
-    tx->vsc_ccout.push_back(txccout);
-    return true;
-};
-
-bool CRecipientFactory::set(const CRecipientCertLock& r)
-{
-    CTxCertifierLockOut txccout(r.nValue, r.address, r.scId, r.epoch);
-    if (txccout.IsDust(::minRelayTxFee))
-    {
-        err = _("Transaction amount too small");
-        return false;
-    }
-    tx->vcl_ccout.push_back(txccout);
-    return true;
-};
-
-bool CRecipientFactory::set(const CRecipientForwardTransfer& r)
-{
-    CTxForwardTransferOut txccout(r.nValue, r.address, r.scId);
-    if (txccout.IsDust(::minRelayTxFee))
-    {
-        err = _("Transaction amount too small");
-        return false;
-    }
-    tx->vft_ccout.push_back(txccout);
-    return true;
-};
-
-bool CRecipientFactory::set(const CRecipientBackwardTransfer& r)
-{
-    // fill vout here but later their amount will be reduced carving out the fee by the caller
-    CTxOut txout(r.nValue, r.scriptPubKey);
-
-    tx->vout.push_back(txout);
-    return true;
-};
-

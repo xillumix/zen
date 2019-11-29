@@ -11,6 +11,13 @@
 #include "librustzcash.h"
 #include <boost/foreach.hpp>
 
+// static global check methods, now called by CTransaction instances
+#include "main.h"
+#include "sc/sidechain.h"
+#include "consensus/validation.h"
+#include "validationinterface.h"
+#include "undo.h"
+
 JSDescription JSDescription::getNewInstance(bool useGroth) {
 	JSDescription js;
 
@@ -249,40 +256,68 @@ std::string CTxScCreationOut::ToString() const
 }
 
 
-CMutableTransaction::CMutableTransaction() : nVersion(TRANSPARENT_TX_VERSION), nLockTime(0) {}
+CMutableTransactionBase::CMutableTransactionBase() :
+    nVersion(TRANSPARENT_TX_VERSION), vout() {}
+
+CMutableTransaction::CMutableTransaction() : CMutableTransactionBase(), nLockTime(0) {}
+
 CMutableTransaction::CMutableTransaction(const CTransaction& tx) :
-    nVersion(tx.nVersion), vin(tx.vin), vout(tx.vout),
     vsc_ccout(tx.vsc_ccout), vcl_ccout(tx.vcl_ccout), vft_ccout(tx.vft_ccout), nLockTime(tx.nLockTime),
     vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig)
 {
-    
+    nVersion = tx.nVersion;
+    vin = tx.vin;
+    vout = tx.vout;
 }
-
+    
 uint256 CMutableTransaction::GetHash() const
 {
     return SerializeHash(*this);
 }
+
+//--------------------------------------------------------------------------------------------------------
+CTransactionBase::CTransactionBase() :
+    nVersion(TRANSPARENT_TX_VERSION), vout() {}
+
+CTransactionBase& CTransactionBase::operator=(const CTransactionBase &tx) {
+    *const_cast<int*>(&nVersion) = tx.nVersion;
+    *const_cast<std::vector<CTxOut>*>(&vout) = tx.vout;
+    return *this;
+}
+
+double CTransactionBase::ComputePriority(double dPriorityInputs, unsigned int nTxSize) const
+{
+    // polymorphic call
+    nTxSize = CalculateModifiedSize(nTxSize);
+    if (nTxSize == 0) return 0.0;
+
+    return dPriorityInputs / nTxSize;
+}
+
+
+CTransaction::CTransaction() :
+    CTransactionBase(), vin(),
+    vsc_ccout(), vcl_ccout(), vft_ccout(),
+    nLockTime(0), vjoinsplit(), joinSplitPubKey(), joinSplitSig() { }
 
 void CTransaction::UpdateHash() const
 {
     *const_cast<uint256*>(&hash) = SerializeHash(*this);
 }
 
-CTransaction::CTransaction() :
-    nVersion(TRANSPARENT_TX_VERSION), vin(), vout(), vsc_ccout(), vcl_ccout(), vft_ccout(),
-    nLockTime(0), vjoinsplit(), joinSplitPubKey(), joinSplitSig() { }
-
 CTransaction::CTransaction(const CMutableTransaction &tx) :
-    nVersion(tx.nVersion), vin(tx.vin), vout(tx.vout), vsc_ccout(tx.vsc_ccout), vcl_ccout(tx.vcl_ccout), vft_ccout(tx.vft_ccout),
+    vsc_ccout(tx.vsc_ccout), vcl_ccout(tx.vcl_ccout), vft_ccout(tx.vft_ccout),
     nLockTime(tx.nLockTime), vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig)
 {
+    *const_cast<int*>(&nVersion) = tx.nVersion;
+    *const_cast<std::vector<CTxIn>*>(&vin) = tx.vin;
+    *const_cast<std::vector<CTxOut>*>(&vout) = tx.vout;
     UpdateHash();
 }
 
 CTransaction& CTransaction::operator=(const CTransaction &tx) {
-    *const_cast<int*>(&nVersion) = tx.nVersion;
+    CTransactionBase::operator=(tx);
     *const_cast<std::vector<CTxIn>*>(&vin) = tx.vin;
-    *const_cast<std::vector<CTxOut>*>(&vout) = tx.vout;
     *const_cast<std::vector<CTxScCreationOut>*>(&vsc_ccout) = tx.vsc_ccout;
     *const_cast<std::vector<CTxCertifierLockOut>*>(&vcl_ccout) = tx.vcl_ccout;
     *const_cast<std::vector<CTxForwardTransferOut>*>(&vft_ccout) = tx.vft_ccout;
@@ -292,6 +327,27 @@ CTransaction& CTransaction::operator=(const CTransaction &tx) {
     *const_cast<joinsplit_sig_t*>(&joinSplitSig) = tx.joinSplitSig;
     *const_cast<uint256*>(&hash) = tx.hash;
     return *this;
+}
+
+unsigned int CTransaction::CalculateModifiedSize(unsigned int nTxSize) const
+{
+    // In order to avoid disincentivizing cleaning up the UTXO set we don't count
+    // the constant overhead for each txin and up to 110 bytes of scriptSig (which
+    // is enough to cover a compressed pubkey p2sh redemption) for priority.
+    // Providing any more cleanup incentive than making additional inputs free would
+    // risk encouraging people to create junk outputs to redeem later.
+    if (nTxSize == 0)
+    {
+        // polymorphic call
+        nTxSize = CalculateSize();
+    }
+    for (std::vector<CTxIn>::const_iterator it(vin.begin()); it != vin.end(); ++it)
+    {
+        unsigned int offset = 41U + std::min(110U, (unsigned int)it->scriptSig.size());
+        if (nTxSize > offset)
+            nTxSize -= offset;
+    }
+    return nTxSize;
 }
 
 CAmount CTransaction::GetValueOut() const
@@ -356,30 +412,14 @@ CAmount CTransaction::GetJoinSplitValueIn() const
     return nValue;
 }
 
-double CTransaction::ComputePriority(double dPriorityInputs, unsigned int nTxSize) const
+bool CTransaction::IsValidLoose() const
 {
-    nTxSize = CalculateModifiedSize(nTxSize);
-    if (nTxSize == 0) return 0.0;
-
-    return dPriorityInputs / nTxSize;
+    return !IsCoinBase();
 }
 
-unsigned int CTransaction::CalculateModifiedSize(unsigned int nTxSize) const
+unsigned int CTransaction::CalculateSize() const
 {
-    // In order to avoid disincentivizing cleaning up the UTXO set we don't count
-    // the constant overhead for each txin and up to 110 bytes of scriptSig (which
-    // is enough to cover a compressed pubkey p2sh redemption) for priority.
-    // Providing any more cleanup incentive than making additional inputs free would
-    // risk encouraging people to create junk outputs to redeem later.
-    if (nTxSize == 0)
-        nTxSize = ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION);
-    for (std::vector<CTxIn>::const_iterator it(vin.begin()); it != vin.end(); ++it)
-    {
-        unsigned int offset = 41U + std::min(110U, (unsigned int)it->scriptSig.size());
-        if (nTxSize > offset)
-            nTxSize -= offset;
-    }
-    return nTxSize;
+    return ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION);
 }
 
 std::string CTransaction::ToString() const
@@ -444,3 +484,246 @@ void CTransaction::getCrosschainOutputs(std::map<uint256, std::vector<uint256> >
 
     LogPrint("sc", "%s():%d - nIdx[%d]\n", __func__, __LINE__, nIdx);
 }
+
+//--------------------------------------------------------------------------------------------
+// binaries other than zend that are produced in the build, do not call these members and therefore do not
+// need linking all of the related symbols. We use this macro as it is already defined with a similar purpose
+// in zen-tx binary build configuration
+#ifdef BITCOIN_TX
+void CTransaction::AddToBlock(CBlock* pblock) const { return; }
+CAmount CTransaction::GetValueIn(const CCoinsViewCache& view) const { return 0; }
+int CTransaction::GetNumbOfInputs() const { return 0; }
+bool CTransaction::CheckInputsLimit(size_t limit, size_t& n) const { return true; }
+bool CTransaction::Check(CValidationState& state, libzcash::ProofVerifier& verifier) const { return true; }
+bool CTransaction::ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const { return true; }
+bool CTransaction::IsStandard(std::string& reason, int nHeight) const { return true; }
+bool CTransaction::CheckFinal(int flags) const { return true; }
+bool CTransaction::IsApplicableToState() const { return true; }
+bool CTransaction::IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const { return true; }
+bool CTransaction::HasNoInputsInMempool(const CTxMemPool& pool) const { return true; }
+bool CTransaction::HaveJoinSplitRequirements(const CCoinsViewCache& view) const { return true; }
+void CTransaction::HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const { return; };
+bool CTransaction::HaveInputs(const CCoinsViewCache& view) const { return true; }
+void CTransaction::UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const { return; }
+void CTransaction::UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo &undo, int nHeight) const { return; }
+bool CTransaction::AreInputsStandard(CCoinsViewCache& view) const { return true; }
+unsigned int CTransaction::GetP2SHSigOpCount(CCoinsViewCache& view) const { return 0; }
+unsigned int CTransaction::GetLegacySigOpCount() const { return 0; }
+bool CTransaction::ContextualCheckInputs(CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
+          const CChain& chain, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams,
+          std::vector<CScriptCheck> *pvChecks) const { return true;}
+void CTransaction::SyncWithWallets(const CBlock* pblock) const { }
+bool CTransaction::CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const { return true; }
+double CTransaction::GetPriority(const CCoinsViewCache &view, int nHeight) const { return 0.0; }
+
+#else
+//----- 
+void CTransaction::AddToBlock(CBlock* pblock) const 
+{
+    pblock->vtx.push_back(*this);
+}
+
+CAmount CTransaction::GetValueIn(const CCoinsViewCache& view) const
+{
+    if (IsCoinBase())
+        return 0;
+
+    CAmount nResult = 0;
+    for (unsigned int i = 0; i < vin.size(); i++)
+    {
+        const CTxIn& ctxin = vin[i];
+        nResult += view.GetOutputFor(ctxin).nValue;
+    }
+
+    nResult += GetJoinSplitValueIn();
+
+    return nResult;
+}
+
+int CTransaction::GetNumbOfInputs() const
+{
+    return vin.size();
+}
+
+bool CTransaction::CheckInputsLimit(size_t limit, size_t& n) const
+{
+    if (limit > 0) {
+        n = vin.size();
+        if (n > limit) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool CTransaction::Check(CValidationState& state, libzcash::ProofVerifier& verifier) const
+{
+    return ::CheckTransaction(*this, state, verifier);
+}
+
+bool CTransaction::ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const
+{
+    return ::ContextualCheckTransaction(*this, state, nHeight, dosLevel);
+}
+
+bool CTransaction::IsStandard(std::string& reason, int nHeight) const
+{
+    return ::IsStandardTx(*this, reason, nHeight);
+}
+
+bool CTransaction::CheckFinal(int flags) const
+{
+    return ::CheckFinalTx(*this, flags);
+}
+
+bool CTransaction::IsApplicableToState() const
+{
+    return Sidechain::ScMgr::instance().IsTxApplicableToState(*this);
+}
+    
+bool CTransaction::IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const
+{
+    for (unsigned int i = 0; i < vin.size(); i++)
+    {
+        COutPoint outpoint = vin[i].prevout;
+        if (pool.mapNextTx.count(outpoint))
+        {
+            // Disable replacement feature for now
+            return state.Invalid(error("conflict in mempool"),
+                 REJECT_INVALID, "conflict-in-mempool");
+        }
+    }
+
+    BOOST_FOREACH(const JSDescription &joinsplit, vjoinsplit) {
+        BOOST_FOREACH(const uint256 &nf, joinsplit.nullifiers) {
+            if (pool.mapNullifiers.count(nf))
+            {
+                return state.Invalid(error("invalid nullifier in mempool"),
+                     REJECT_INVALID, "invalid-nullifier");
+            }
+        }
+    }
+
+    return Sidechain::ScMgr::instance().IsTxAllowedInMempool(pool, *this, state);
+}
+bool CTransaction::HasNoInputsInMempool(const CTxMemPool& pool) const
+{
+    for (unsigned int i = 0; i < vin.size(); i++)
+        if (pool.exists(vin[i].prevout.hash))
+            return false;
+    return true;
+}
+
+bool CTransaction::HaveJoinSplitRequirements(const CCoinsViewCache& view) const
+{
+    return view.HaveJoinSplitRequirements(*this);
+}
+
+void CTransaction::HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const
+{
+    BOOST_FOREACH(const JSDescription &joinsplit, vjoinsplit) {
+        BOOST_FOREACH(const uint256 &note_commitment, joinsplit.commitments) {
+            // Insert the note commitments into our temporary tree.
+            tree.append(note_commitment);
+        }
+    }
+}
+
+bool CTransaction::HaveInputs(const CCoinsViewCache& view) const
+{
+    return view.HaveInputs(*this);
+}
+
+void CTransaction::UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const
+{
+    return ::UpdateCoins(*this, state, view, nHeight);
+}
+
+void CTransaction::UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& blockundo, int nHeight) const
+{
+    CTxUndo undoDummy;
+    if (!IsCoinBase() ) {
+        blockundo.vtxundo.push_back(CTxUndo());
+    }
+    return ::UpdateCoins(*this, state, view, (IsCoinBase() ? undoDummy : blockundo.vtxundo.back()), nHeight);
+}
+
+bool CTransaction::AreInputsStandard(CCoinsViewCache& view) const 
+{
+    return ::AreInputsStandard(*this, view); 
+}
+
+unsigned int CTransaction::GetP2SHSigOpCount(CCoinsViewCache& view) const 
+{
+    return ::GetP2SHSigOpCount(*this, view);
+}
+
+unsigned int CTransaction::GetLegacySigOpCount() const 
+{
+    return ::GetLegacySigOpCount(*this);
+}
+
+bool CTransaction::ContextualCheckInputs(CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
+          const CChain& chain, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams,
+          std::vector<CScriptCheck> *pvChecks) const
+{
+    return ::ContextualCheckInputs(*this, state, view, fScriptChecks, chain, flags, cacheStore, consensusParams, pvChecks);
+}
+
+void CTransaction::SyncWithWallets(const CBlock* pblock) const
+{
+    ::SyncWithWallets(*this, pblock);
+}
+
+bool CTransaction::CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const
+{
+    BOOST_FOREACH(const CTxIn txin, vin)
+    {
+        if (!view.HaveCoins(txin.prevout.hash))
+        {
+            if (pfMissingInputs)
+            {
+                *pfMissingInputs = true;
+            }
+            LogPrint("mempool", "Dropping txid %s : no coins for vin\n", GetHash().ToString());
+            return false;
+        }
+    }
+    return true;
+}
+
+double CTransaction::GetPriority(const CCoinsViewCache &view, int nHeight) const
+{
+#if 0
+    if (IsCoinBase())
+    {
+        return 0.0;
+    }
+
+    // Joinsplits do not reveal any information about the value or age of a note, so we
+    // cannot apply the priority algorithm used for transparent utxos.  Instead, we just
+    // use the maximum priority whenever a transaction contains any JoinSplits.
+    // (Note that coinbase transactions cannot contain JoinSplits.)
+    // FIXME: this logic is partially duplicated between here and CreateNewBlock in miner.cpp.
+
+    if (getVjoinsplitSize() > 0) {
+        return MAX_PRIORITY;
+    }
+
+    double dResult = 0.0;
+    BOOST_FOREACH(const CTxIn& txin, vin)
+    {
+        const CCoins* coins = view.AccessCoins(txin.prevout.hash);
+        assert(coins);
+        if (!coins->IsAvailable(txin.prevout.n)) continue;
+        if (coins->nHeight < nHeight) {
+            dResult += coins->vout[txin.prevout.n].nValue * (nHeight-coins->nHeight);
+        }
+    }
+
+    return ComputePriority(dResult);
+#else
+    return view.GetPriority(*this, nHeight);
+#endif
+}
+#endif // BITCOIN_TX

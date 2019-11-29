@@ -7,6 +7,7 @@
 #define BITCOIN_PRIMITIVES_BLOCK_H
 
 #include "primitives/transaction.h"
+#include "primitives/certificate.h"
 #include "serialize.h"
 #include "uint256.h"
 
@@ -22,6 +23,7 @@ class CBlockHeader
 public:
     // header
     static const size_t HEADER_SIZE=4+32+32+32+4+4+32; // excluding Equihash solution
+    static const int32_t SC_CERT_VERSION = 0x20000001;
     int32_t nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
@@ -82,6 +84,7 @@ class CBlock : public CBlockHeader
 public:
     // network and disk
     std::vector<CTransaction> vtx;
+    std::vector<CScCertificate> vcert;
 
     // memory only
     mutable std::vector<uint256> vMerkleTree;
@@ -103,12 +106,17 @@ public:
     inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
         READWRITE(*(CBlockHeader*)this);
         READWRITE(vtx);
+        if (this->nVersion == SC_CERT_VERSION)
+        {
+            READWRITE(vcert);
+        }
     }
 
     void SetNull()
     {
         CBlockHeader::SetNull();
         vtx.clear();
+        vcert.clear();
         vMerkleTree.clear();
     }
 

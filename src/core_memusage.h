@@ -36,6 +36,14 @@ static inline size_t RecursiveDynamicUsage(const CTransaction& tx) {
     return mem;
 }
 
+static inline size_t RecursiveDynamicUsage(const CScCertificate& cert) {
+    size_t mem = memusage::DynamicUsage(cert.vout); // TODO add other outputs
+    for (std::vector<CTxOut>::const_iterator it = cert.vout.begin(); it != cert.vout.end(); it++) {
+        mem += RecursiveDynamicUsage(*it);
+    }
+    return mem;
+}
+
 static inline size_t RecursiveDynamicUsage(const CMutableTransaction& tx) {
     size_t mem = memusage::DynamicUsage(tx.vin) + memusage::DynamicUsage(tx.vout);
     for (std::vector<CTxIn>::const_iterator it = tx.vin.begin(); it != tx.vin.end(); it++) {
@@ -48,8 +56,14 @@ static inline size_t RecursiveDynamicUsage(const CMutableTransaction& tx) {
 }
 
 static inline size_t RecursiveDynamicUsage(const CBlock& block) {
-    size_t mem = memusage::DynamicUsage(block.vtx) + memusage::DynamicUsage(block.vMerkleTree);
+    size_t mem =
+        memusage::DynamicUsage(block.vtx) +
+        memusage::DynamicUsage(block.vcert) +
+        memusage::DynamicUsage(block.vMerkleTree);
     for (std::vector<CTransaction>::const_iterator it = block.vtx.begin(); it != block.vtx.end(); it++) {
+        mem += RecursiveDynamicUsage(*it);
+    }
+    for (std::vector<CScCertificate>::const_iterator it = block.vcert.begin(); it != block.vcert.end(); it++) {
         mem += RecursiveDynamicUsage(*it);
     }
     return mem;

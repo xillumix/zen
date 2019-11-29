@@ -18,17 +18,26 @@
 
 using namespace std;
 
-CTxMemPoolEntry::CTxMemPoolEntry():
-    nFee(0), nTxSize(0), nModSize(0), nUsageSize(0), nTime(0), dPriority(0.0), hadNoDependencies(false)
+CMemPoolEntry::CMemPoolEntry():
+    nFee(0), nModSize(0), nUsageSize(0), nTime(0), dPriority(0.0)
 {
     nHeight = MEMPOOL_HEIGHT;
+}
+
+CMemPoolEntry::CMemPoolEntry(const CAmount& _nFee, int64_t _nTime, double _dPriority, unsigned int _nHeight) :
+    nFee(_nFee), nTime(_nTime), dPriority(_dPriority), nHeight(_nHeight)
+{
+}
+
+CTxMemPoolEntry::CTxMemPoolEntry(): nTxSize(0), hadNoDependencies(false)
+{
 }
 
 CTxMemPoolEntry::CTxMemPoolEntry(const CTransaction& _tx, const CAmount& _nFee,
                                  int64_t _nTime, double _dPriority,
                                  unsigned int _nHeight, bool poolHasNoInputsOf):
-    tx(_tx), nFee(_nFee), nTime(_nTime), dPriority(_dPriority), nHeight(_nHeight),
-    hadNoDependencies(poolHasNoInputsOf)
+    CMemPoolEntry(_nFee, _nTime, _dPriority, _nHeight),
+    tx(_tx), hadNoDependencies(poolHasNoInputsOf)
 {
     nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
     nModSize = tx.CalculateModifiedSize(nTxSize);
@@ -44,6 +53,33 @@ double
 CTxMemPoolEntry::GetPriority(unsigned int currentHeight) const
 {
     CAmount nValueIn = tx.GetValueOut()+nFee;
+    double deltaPriority = ((double)(currentHeight-nHeight)*nValueIn)/nModSize;
+    double dResult = dPriority + deltaPriority;
+    return dResult;
+}
+
+CCertificateMemPoolEntry::CCertificateMemPoolEntry(): nCertificateSize(0){}
+
+CCertificateMemPoolEntry::CCertificateMemPoolEntry(const CScCertificate& _cert, const CAmount& _nFee,
+                                 int64_t _nTime, double _dPriority,
+                                 unsigned int _nHeight):
+    CMemPoolEntry(_nFee, _nTime, _dPriority, _nHeight),
+    cert(_cert) 
+{
+    nCertificateSize = ::GetSerializeSize(cert, SER_NETWORK, PROTOCOL_VERSION);
+    nModSize = cert.CalculateModifiedSize(nCertificateSize);
+    nUsageSize = RecursiveDynamicUsage(cert);
+}
+
+CCertificateMemPoolEntry::CCertificateMemPoolEntry(const CCertificateMemPoolEntry& other)
+{
+    *this = other;
+}
+
+double
+CCertificateMemPoolEntry::GetPriority(unsigned int currentHeight) const
+{
+    CAmount nValueIn = cert.GetValueOut()+nFee;
     double deltaPriority = ((double)(currentHeight-nHeight)*nValueIn)/nModSize;
     double dResult = dPriority + deltaPriority;
     return dResult;
@@ -114,6 +150,46 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry,
     return true;
 }
 
+bool CTxMemPool::addUnchecked(const uint256& hash, const CCertificateMemPoolEntry &entry, bool fCurrentEstimate)
+{
+    // TODO use a separate cs
+    LOCK(cs);
+    mapCertificate[hash] = entry;
+    const CScCertificate& cert = mapCertificate[hash].GetCertificate();
+    nCertificatesUpdated++;
+    totalCertificateSize += entry.GetCertificateSize();
+    cachedInnerUsage += entry.DynamicMemoryUsage();
+// TODO for the time being skip the part on policy estimator, certificates currently have maximum priority
+// minerPolicyEstimator->processTransaction(entry, fCurrentEstimate);
+    return true;
+}
+
+bool CTxMemPool::addUnchecked(
+    const CTransactionBase& tx, const CAmount& nFee, int64_t nTime, double dPriority, int nHeight,
+    bool poolHasNoInputsOf, bool fCurrentEstimate)
+{
+    // for the time being we choose to have two separate pools
+    if (dynamic_cast<const CTransaction*>(&tx) )
+    {
+        CTxMemPoolEntry entry(
+            dynamic_cast<const CTransaction&>(tx), nFee, GetTime(), dPriority,
+            chainActive.Height(), poolHasNoInputsOf);
+        return addUnchecked(tx.GetHash(), entry, fCurrentEstimate);
+    }
+    else
+    if (dynamic_cast<const CScCertificate*>(&tx) )
+    {
+        CCertificateMemPoolEntry entry(
+            dynamic_cast<const CScCertificate&>(tx), nFee, GetTime(), dPriority,
+            chainActive.Height());
+        return addUnchecked(tx.GetHash(), entry, fCurrentEstimate);
+    }
+    else
+    {
+        LogPrint("mempool", "%s():%d - ERROR: illegal tx=%s\n", __func__, __LINE__, tx.GetHash().ToString() );
+        return false;
+    }
+}
 
 void CTxMemPool::remove(const CTransaction &origTx, std::list<CTransaction>& removed, bool fRecursive)
 {
@@ -279,6 +355,7 @@ void CTxMemPool::clear()
     mapTx.clear();
     mapNextTx.clear();
     totalTxSize = 0;
+    totalCertificateSize = 0;
     cachedInnerUsage = 0;
     ++nTransactionsUpdated;
 }
@@ -352,6 +429,19 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
             UpdateCoins(tx, state, mempoolDuplicate, 1000000);
         }
     }
+
+    for (auto it = mapCertificate.begin(); it != mapCertificate.end(); it++)
+    {
+        unsigned int i = 0;
+        checkTotal += it->second.GetCertificateSize();
+        innerUsage += it->second.DynamicMemoryUsage();
+        const auto& cert = it->second.GetCertificate();
+        CValidationState state;
+        assert(cert.ContextualCheckInputs(state, mempoolDuplicate, false, chainActive, 0, false, Params().GetConsensus(), NULL));
+        // TODO not necessary, double check it
+        // UpdateCoins(cert, state, mempoolDuplicate, 1000000);
+    }
+
     unsigned int stepsSinceLastRemove = 0;
     while (!waitingOnDependants.empty()) {
         const CTxMemPoolEntry* entry = waitingOnDependants.front();
@@ -385,7 +475,7 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
         assert(&tx == it->second);
     }
 
-    assert(totalTxSize == checkTotal);
+    assert((totalTxSize+totalCertificateSize) == checkTotal);
     assert(innerUsage == cachedInnerUsage);
 }
 
@@ -394,8 +484,10 @@ void CTxMemPool::queryHashes(vector<uint256>& vtxid)
     vtxid.clear();
 
     LOCK(cs);
-    vtxid.reserve(mapTx.size());
+    vtxid.reserve(mapTx.size() + mapCertificate.size());
     for (map<uint256, CTxMemPoolEntry>::iterator mi = mapTx.begin(); mi != mapTx.end(); ++mi)
+        vtxid.push_back((*mi).first);
+    for (map<uint256, CCertificateMemPoolEntry>::iterator mi = mapCertificate.begin(); mi != mapCertificate.end(); ++mi)
         vtxid.push_back((*mi).first);
 }
 
@@ -405,6 +497,15 @@ bool CTxMemPool::lookup(uint256 hash, CTransaction& result) const
     map<uint256, CTxMemPoolEntry>::const_iterator i = mapTx.find(hash);
     if (i == mapTx.end()) return false;
     result = i->second.GetTx();
+    return true;
+}
+
+bool CTxMemPool::lookup(uint256 hash, CScCertificate& result) const
+{
+    LOCK(cs);
+    map<uint256, CCertificateMemPoolEntry>::const_iterator i = mapCertificate.find(hash);
+    if (i == mapCertificate.end()) return false;
+    result = i->second.GetCertificate();
     return true;
 }
 
@@ -482,12 +583,16 @@ void CTxMemPool::ClearPrioritisation(const uint256 hash)
     mapDeltas.erase(hash);
 }
 
-bool CTxMemPool::HasNoInputsOf(const CTransaction &tx) const
+bool CTxMemPool::HasNoInputsOf(const CTransactionBase &tx) const
 {
+#if 0
     for (unsigned int i = 0; i < tx.vin.size(); i++)
         if (exists(tx.vin[i].prevout.hash))
             return false;
     return true;
+#else
+    return tx.HasNoInputsInMempool(*this);
+#endif
 }
 
 CCoinsViewMemPool::CCoinsViewMemPool(CCoinsView *baseIn, CTxMemPool &mempoolIn) : CCoinsViewBacked(baseIn), mempool(mempoolIn) { }
@@ -519,3 +624,4 @@ size_t CTxMemPool::DynamicMemoryUsage() const {
     LOCK(cs);
     return memusage::DynamicUsage(mapTx) + memusage::DynamicUsage(mapNextTx) + memusage::DynamicUsage(mapDeltas) + cachedInnerUsage;
 }
+

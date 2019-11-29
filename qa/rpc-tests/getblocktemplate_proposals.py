@@ -79,15 +79,25 @@ def template_to_bytes(tmpl, txlist):
     blk += varlenEncode(len(txlist))
     for tx in txlist:
         blk += tx
+    # TODO fill vector of certificates (0 for the time being)
+    if tmpl['version'] == 536870913:
+        print "Block ver=",tmpl['version']
+        blk += varlenEncode(0)
     return blk
 
 def template_to_hex(tmpl, txlist):
     return b2x(template_to_bytes(tmpl, txlist))
 
 def assert_template(node, tmpl, txlist, expect):
-    rsp = node.getblocktemplate({'data':template_to_hex(tmpl, txlist),'mode':'proposal'})
-    if rsp != expect:
-        raise AssertionError('unexpected: %s' % (rsp,))
+#    try:
+#        print "list=",template_to_hex(tmpl, txlist)
+#        raw_input("Pres to continue 1...")
+     rsp = node.getblocktemplate({'data':template_to_hex(tmpl, txlist),'mode':'proposal'})
+     if rsp != expect:
+#         print "rsp: ", rsp
+         raise AssertionError('unexpected: %s' % (rsp,))
+#    except JSONRPCException as e:
+#            print "exception: ", e.error['message']
 
 class GetBlockTemplateProposalTest(BitcoinTestFramework):
     '''
@@ -115,6 +125,7 @@ class GetBlockTemplateProposalTest(BitcoinTestFramework):
         #assert_template(node, tmpl, txlist, 'FIXME')
         #txlist[0][4+1+36+1+1] -= 1
 
+        #raw_input("Pres to continue 1...")
         # Test 2: Bad input hash for gen tx
         txlist[0][4+1] += 1
         assert_template(node, tmpl, txlist, 'bad-cb-missing')

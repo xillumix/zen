@@ -106,6 +106,30 @@ void UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, 
     pblock->nTime = std::max(pindexPrev->GetMedianTimePast()+1, GetAdjustedTime());
 }
 
+void GetBlockCertPriorityData(const CBlock *pblock, int nHeight, int64_t nMedianTimePast, const CCoinsViewCache& view,
+                               vector<TxPriority>& vecPriority, list<COrphan>& vOrphan, map<uint256, vector<COrphan*> >& mapDependers)
+{
+    for (auto it_cert = mempool.mapCertificate.begin();
+         it_cert != mempool.mapCertificate.end(); ++it_cert)
+    {
+        const CScCertificate& cert = it_cert->second.GetCertificate();
+
+        uint256 hash = cert.GetHash();
+        double dPriority = it_cert->second.GetPriority(nHeight);
+        CAmount nFee = it_cert->second.GetFee();
+
+        mempool.ApplyDeltas(hash, dPriority, nFee);
+
+        unsigned int nCertSize = ::GetSerializeSize(cert, SER_NETWORK, PROTOCOL_VERSION);
+        CFeeRate feeRate(nFee, nCertSize);
+
+        LogPrint("cert", "%s():%d - adding to prio vec cert = %s, prio=%f, feeRate=%s\n",
+            __func__, __LINE__, hash.ToString(), dPriority, feeRate.ToString());
+
+        vecPriority.push_back(TxPriority(dPriority, feeRate, &it_cert->second.GetCertificate()));
+    }
+}
+
 void GetBlockTxPriorityData(const CBlock *pblock, int nHeight, int64_t nMedianTimePast, const CCoinsViewCache& view,
                                vector<TxPriority>& vecPriority, list<COrphan>& vOrphan, map<uint256, vector<COrphan*> >& mapDependers)
 {
@@ -343,7 +367,8 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
         pblock->nTime = GetAdjustedTime();
         const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
 
-        pblock->nVersion = ComputeBlockVersion(pindexPrev, chainparams.GetConsensus());
+//        pblock->nVersion = ComputeBlockVersion(pindexPrev, chainparams.GetConsensus());
+        pblock->nVersion = CBlockHeader::SC_CERT_VERSION;
         // -regtest only: allow overriding block.nVersion with
         // -blockversion=N to test forking scenarios
         if (chainparams.MineBlocksOnDemand())
@@ -358,12 +383,21 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
 
         // This vector will be sorted into a priority queue:
         vector<TxPriority> vecPriority;
+#if 0
         vecPriority.reserve(mempool.mapTx.size());
+#else
+        // both tx and cert
+        vecPriority.reserve(mempool.size());
+#endif
         bool fDeprecatedGetBlockTemplate = GetBoolArg("-deprecatedgetblocktemplate", false);
         if (fDeprecatedGetBlockTemplate)
             GetBlockTxPriorityDataOld(pblock, nHeight, nMedianTimePast, view, vecPriority, vOrphan, mapDependers);
         else
             GetBlockTxPriorityData(pblock, nHeight, nMedianTimePast, view, vecPriority, vOrphan, mapDependers);
+
+#if 1
+        GetBlockCertPriorityData(pblock, nHeight, nMedianTimePast, view, vecPriority, vOrphan, mapDependers);
+#endif
 
         // Collect transactions into block
         uint64_t nBlockSize = 1000;
@@ -379,18 +413,26 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
             // Take highest priority transaction off the priority queue:
             double dPriority = vecPriority.front().get<0>();
             CFeeRate feeRate = vecPriority.front().get<1>();
-            const CTransaction& tx = *(vecPriority.front().get<2>());
+            const CTransactionBase& tx = *(vecPriority.front().get<2>());
 
             std::pop_heap(vecPriority.begin(), vecPriority.end(), comparer);
             vecPriority.pop_back();
 
             // Size limits
+#if 0
             unsigned int nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
+#else
+            unsigned int nTxSize = tx.CalculateSize();
+#endif
             if (nBlockSize + nTxSize >= nBlockMaxSize)
                 continue;
 
             // Legacy limits on sigOps:
+#if 0
             unsigned int nTxSigOps = GetLegacySigOpCount(tx);
+#else
+            unsigned int nTxSigOps = tx.GetLegacySigOpCount();
+#endif
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
                 continue;
 
@@ -417,26 +459,47 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
             }
 
             // Skip transaction if max block complexity reached.
+#if 0
             int nTxComplexity = tx.vin.size() * tx.vin.size();
+#else
+            int nTxComplexity = tx.GetComplexity();
+#endif
             if (!fDeprecatedGetBlockTemplate && nBlockMaxComplexitySize > 0 && nBlockComplexity + nTxComplexity >= nBlockMaxComplexitySize)
                 continue;
 
+#if 0
             if (!view.HaveInputs(tx))
+#else
+            if (!tx.HaveInputs(view))
+#endif
                 continue;
 
             // skip transactions that send forward crosschain amounts if the creation of the target sidechain is
             // not yet in blockchain. This should happen only if a chain has been reverted and a mix of creation/transfers
             // has been placed back in the mem pool The skipped tx will be mined in the next block if the scid is found
 
+#if 0
             if (!scMgr.IsTxApplicableToState(tx) )
+#else
+            if (!tx.IsApplicableToState() )
+#endif
             {
                 LogPrint("sc", "%s():%d - tx=%s is not applicable, skipping it...\n", __func__, __LINE__, tx.GetHash().ToString() );
                 continue;
             }
 
+#if 0
             CAmount nTxFees = view.GetValueIn(tx)-tx.GetValueOut();
+#else
+            CAmount valueIn = tx.GetValueIn(view);
+            CAmount nTxFees = tx.GetFeeAmount(valueIn);
+#endif
 
+#if 0
             nTxSigOps += GetP2SHSigOpCount(tx, view);
+#else
+            nTxSigOps += tx.GetP2SHSigOpCount(view);
+#endif
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
                 continue;
 
@@ -445,13 +508,25 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
             // Note that flags: we don't want to set mempool/IsStandard()
             // policy here, but we still have to ensure that the block we
             // create only contains transactions that are valid in new blocks.
+#if 0
             if (!ContextualCheckInputs(tx, state, view, true, chainActive, MANDATORY_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_CHECKBLOCKATHEIGHT, true, Params().GetConsensus()))
+#else
+            if (!tx.ContextualCheckInputs(state, view, true, chainActive, MANDATORY_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_CHECKBLOCKATHEIGHT, true, Params().GetConsensus()))
+#endif
                 continue;
 
+#if 0
             UpdateCoins(tx, state, view, nHeight);
+#else
+            tx.UpdateCoins(state, view, nHeight);
+#endif
 
             // Added
+#if 0
             pblock->vtx.push_back(tx);
+#else
+            tx.AddToBlock(pblock);
+#endif
             pblocktemplate->vTxFees.push_back(nTxFees);
             pblocktemplate->vTxSigOps.push_back(nTxSigOps);
             nBlockSize += nTxSize;

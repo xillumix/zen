@@ -25,6 +25,8 @@
 #include "sc/sidechain.h"
 #include "sc/sidechainrpc.h"
 
+#include "validationinterface.h"
+
 using namespace std;
 
 using namespace Sidechain;
@@ -156,7 +158,22 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
         else
             txs.push_back(tx.GetHash().GetHex());
     }
+    UniValue certs(UniValue::VARR);
+    BOOST_FOREACH(const CScCertificate& cert, block.vcert)
+    {
+#if 0 // TODO
+        if(txDetails)
+        {
+            UniValue objTx(UniValue::VOBJ);
+            TxToJSON(tx, uint256(), objTx);
+            txs.push_back(objTx);
+        }
+        else
+#endif
+            certs.push_back(cert.GetHash().GetHex());
+    }
     result.push_back(Pair("tx", txs));
+    result.push_back(Pair("cert", certs));
     result.push_back(Pair("time", block.GetBlockTime()));
     result.push_back(Pair("nonce", block.nNonce.GetHex()));
     result.push_back(Pair("solution", HexStr(block.nSolution)));
@@ -260,6 +277,30 @@ UniValue mempoolToJSON(bool fVerbose = false)
             }
 
             info.push_back(Pair("depends", depends));
+            o.push_back(Pair(hash.ToString(), info));
+        }
+        BOOST_FOREACH(const PAIRTYPE(uint256, CCertificateMemPoolEntry)& entry, mempool.mapCertificate)
+        {
+            const uint256& hash = entry.first;
+            const auto& e = entry.second;
+            UniValue info(UniValue::VOBJ);
+            info.push_back(Pair("size", (int)e.GetCertificateSize()));
+            info.push_back(Pair("fee", ValueFromAmount(e.GetFee())));
+            info.push_back(Pair("time", e.GetTime()));
+            info.push_back(Pair("height", (int)e.GetHeight()));
+            info.push_back(Pair("startingpriority", e.GetPriority(e.GetHeight())));
+            info.push_back(Pair("currentpriority", e.GetPriority(chainActive.Height())));
+            const CScCertificate& cert = e.GetCertificate();
+            o.push_back(Pair(hash.ToString(), info));
+        }
+        BOOST_FOREACH(const auto& entry, mempool.mapDeltas)
+        {
+            const uint256& hash = entry.first;
+            const auto& p = entry.second.first;
+            const auto& f = entry.second.second;
+            UniValue info(UniValue::VOBJ);
+            info.push_back(Pair("fee", ValueFromAmount(f)));
+            info.push_back(Pair("priority", p));
             o.push_back(Pair(hash.ToString(), info));
         }
         return o;
@@ -868,7 +909,7 @@ UniValue mempoolInfoToJSON()
 {
     UniValue ret(UniValue::VOBJ);
     ret.push_back(Pair("size", (int64_t) mempool.size()));
-    ret.push_back(Pair("bytes", (int64_t) mempool.GetTotalTxSize()));
+    ret.push_back(Pair("bytes", (int64_t) mempool.GetTotalSize()));
     ret.push_back(Pair("usage", (int64_t) mempool.DynamicMemoryUsage()));
 
     return ret;
@@ -1284,7 +1325,8 @@ UniValue dbg_do(const UniValue& params, bool fHelp)
             + HelpExampleCli("dbg_do", "\"todo\"")
         );
     }
-    std::string ret = "TODO";
+    std::string ret = "writing...";
+    GetMainSignals().SetBestChain(chainActive.GetLocator());
 
     return ret;
 }
