@@ -89,7 +89,7 @@ class headers(BitcoinTestFramework):
         print "\nNode1 balance: ", self.nodes[1].getbalance("", 0)
 
         self.mark_logs("\nNode 1 creates the SC spending "+str(creation_amount)+" coins ...")
-        raw_input("press enter to go on..")
+#        raw_input("press enter to go on..")
         amounts = []
         amounts.append( {"address":"dada", "amount": creation_amount})
         creating_tx = self.nodes[1].sc_create(scid, 123, amounts);
@@ -126,7 +126,7 @@ class headers(BitcoinTestFramework):
 
         taddr = self.nodes[1].getnewaddress();
         self.mark_logs("\nNode 1 performs a bwd transfer of "+str(bwt_amount)+" coins to taddr["+str(taddr)+"]...")
-        raw_input("press enter to go on..")
+#        raw_input("press enter to go on..")
         amounts = []
         amounts.append( {"address":taddr, "amount": bwt_amount})
         cert = self.nodes[1].sc_bwdtr(scid, amounts);

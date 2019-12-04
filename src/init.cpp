@@ -1673,11 +1673,19 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 BOOST_FOREACH(const CWalletTx& wtxOld, vWtx)
                 {
                     uint256 hash = wtxOld.GetHash();
+#if 0
                     std::map<uint256, CWalletTx>::iterator mi = pwalletMain->mapWallet.find(hash);
+#else
+                    auto mi = pwalletMain->mapWallet.find(hash);
+#endif
                     if (mi != pwalletMain->mapWallet.end())
                     {
                         const CWalletTx* copyFrom = &wtxOld;
+#if 0
                         CWalletTx* copyTo = &mi->second;
+#else
+                        CWalletTx* copyTo = mi->second.get();
+#endif
                         copyTo->mapValue = copyFrom->mapValue;
                         copyTo->vOrderForm = copyFrom->vOrderForm;
                         copyTo->nTimeReceived = copyFrom->nTimeReceived;

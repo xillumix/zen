@@ -310,9 +310,15 @@ DBErrors CWalletDB::ReorderTransactions(CWallet* pwallet)
     typedef multimap<int64_t, TxPair > TxItems;
     TxItems txByTime;
 
+#if 0
     for (map<uint256, CWalletTx>::iterator it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it)
     {
         CWalletTx* wtx = &((*it).second);
+#else
+    for (auto it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it)
+    {
+        CWalletTx* wtx = it->second.get();
+#endif
         txByTime.insert(make_pair(wtx->nTimeReceived, TxPair(wtx, (CAccountingEntry*)0)));
     }
     list<CAccountingEntry> acentries;
@@ -817,7 +823,11 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
         pwallet->nTimeFirstKey = 1; // 0 would be considered 'no value'
 
     BOOST_FOREACH(uint256 hash, wss.vWalletUpgrade)
+#if 0
         WriteTx(hash, pwallet->mapWallet[hash]);
+#else
+        WriteTx(hash, *(pwallet->mapWallet[hash]));
+#endif
 
     // Rewrite encrypted wallets of versions 0.4.0 and 0.5.0rc:
     if (wss.fIsEncrypted && (wss.nFileVersion == 40000 || wss.nFileVersion == 50000))

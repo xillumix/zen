@@ -869,7 +869,11 @@ TEST(wallet_tests, ClearNoteWitnessCache) {
     wallet.GetNoteWitnesses(notes, witnesses, anchor2);
     EXPECT_TRUE((bool) witnesses[0]);
     EXPECT_FALSE((bool) witnesses[1]);
+#if 0
     EXPECT_EQ(1, wallet.mapWallet[hash].mapNoteData[jsoutpt].witnessHeight);
+#else
+    EXPECT_EQ(1, wallet.mapWallet[hash]->mapNoteData[jsoutpt].witnessHeight);
+#endif
     EXPECT_EQ(1, wallet.nWitnessCacheSize);
 
     // After clearing, we should not have a witness for either note
@@ -878,7 +882,11 @@ TEST(wallet_tests, ClearNoteWitnessCache) {
     wallet.GetNoteWitnesses(notes, witnesses, anchor2);
     EXPECT_FALSE((bool) witnesses[0]);
     EXPECT_FALSE((bool) witnesses[1]);
+#if 0
     EXPECT_EQ(-1, wallet.mapWallet[hash].mapNoteData[jsoutpt].witnessHeight);
+#else
+    EXPECT_EQ(-11, wallet.mapWallet[hash]->mapNoteData[jsoutpt].witnessHeight);
+#endif
     EXPECT_EQ(0, wallet.nWitnessCacheSize);
 }
 
@@ -1063,11 +1071,20 @@ TEST(wallet_tests, MarkAffectedTransactionsDirty) {
     wallet.MarkAffectedTransactionsDirty(wtx);
 
     // After getting a cached value, the first tx should be clean
+#if 0
     wallet.mapWallet[hash].GetDebit(ISMINE_ALL);
     EXPECT_TRUE(wallet.mapWallet[hash].fDebitCached);
+#else
+    wallet.mapWallet[hash]->GetDebit(ISMINE_ALL);
+    EXPECT_TRUE(wallet.mapWallet[hash]->fDebitCached);
+#endif
 
     // After adding the note spend, the first tx should be dirty
     wallet.AddToWallet(wtx2, true, NULL);
     wallet.MarkAffectedTransactionsDirty(wtx2);
+#if 0
     EXPECT_FALSE(wallet.mapWallet[hash].fDebitCached);
+#else
+    EXPECT_FALSE(wallet.mapWallet[hash]->fDebitCached);
+#endif
 }

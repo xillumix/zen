@@ -1,5 +1,8 @@
 #include "primitives/certificate.h"
 #include "primitives/block.h"
+#include "undo.h"
+#include "coins.h"
+#include "validationinterface.h"
 
 CScCertificate::CScCertificate() : CTransactionBase(), scId(), totalAmount(), vbt_ccout(), nonce() { }
 
@@ -101,3 +104,31 @@ uint256 CTxBackwardTransferCrosschainOut::GetHash() const
 {
     return SerializeHash(*this);
 }
+
+void CScCertificate::UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const
+{
+    CBlockUndo dum;
+    UpdateCoins(state, view, dum, nHeight);
+}
+
+void CScCertificate::UpdateCoins(CValidationState &state, CCoinsViewCache& inputs, CBlockUndo& blockundo, int nHeight) const
+{
+    // TODO handle blockundo
+    // add outputs
+    LogPrint("cert", "%s():%d - adding coins for cert [%s]\n", __func__, __LINE__, GetHash().ToString());
+    inputs.ModifyCoins(GetHash())->FromTx(*this, nHeight);
+}
+
+//--------------------------------------------------------------------------------------------
+// binaries other than zend that are produced in the build, do not call these members and therefore do not
+// need linking all of the related symbols. We use this macro as it is already defined with a similar purpose
+// in zen-tx binary build configuration
+#ifdef BITCOIN_TX
+void CScCertificate::SyncWithWallets(const CBlock* pblock) const { return; }
+#else
+void CScCertificate::SyncWithWallets(const CBlock* pblock) const
+{
+    LogPrint("cert", "%s():%d - sync with wallet cert[%s]\n", __func__, __LINE__, GetHash().ToString());
+    ::SyncWithWallets(*this, pblock);
+}
+#endif

@@ -2664,6 +2664,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         nSigOps += GetLegacySigOpCount(tx);
 #else
     std::vector<const CTransactionBase*> vTxBase;
+    /*
     vTxBase.reserve(block.vtx.size() + block.vcert.size()); 
 
     for (unsigned int i = 0; i < block.vtx.size(); i++)
@@ -2674,6 +2675,8 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     {
         vTxBase.push_back(&(block.vcert[i]));
     }
+    */
+    block.GetTxAndCertsVector(vTxBase);
 
     for (unsigned int i = 0; i < vTxBase.size(); i++)
     {
@@ -3133,6 +3136,7 @@ bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *
     // Remove conflicting transactions from the mempool.
     list<CTransaction> txConflicted;
     mempool.removeForBlock(pblock->vtx, pindexNew->nHeight, txConflicted, !IsInitialBlockDownload());
+    // TODO remove also certificates from mempool
     mempool.check(pcoinsTip);
     // Update chainActive & related variables.
     UpdateTip(pindexNew);
@@ -3145,6 +3149,13 @@ bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *
     BOOST_FOREACH(const CTransaction &tx, pblock->vtx) {
         SyncWithWallets(tx, pblock);
     }
+#if 1
+    // ... and about certificates that got confirmed:
+    // note that a certificate having no inputs has no conflicts
+    BOOST_FOREACH(const CScCertificate &cert, pblock->vcert) {
+        cert.SyncWithWallets(pblock);
+    }
+#endif
     // Update cached incremental witnesses
     GetMainSignals().ChainTip(pindexNew, pblock, oldTree, true);
 

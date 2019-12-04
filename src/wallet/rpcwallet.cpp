@@ -169,11 +169,19 @@ CBitcoinAddress GetAccountAddress(string strAccount, bool bForceNew=false)
     {
         /* Get script for addr without OP_CHECKBLOCKATHEIGHT, cause we will use it only for searching */
         CScript scriptPubKey = GetScriptForDestination(account.vchPubKey.GetID(), false);
+#if 0
         for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin();
+#else
+        for (auto it = pwalletMain->mapWallet.begin();
+#endif
              it != pwalletMain->mapWallet.end() && account.vchPubKey.IsValid();
              ++it)
         {
+#if 0
             const CWalletTx& wtx = (*it).second;
+#else
+            const CWalletTx& wtx = *((*it).second);
+#endif
             BOOST_FOREACH(const CTxOut& txout, wtx.vout)
             {
                 /* Check that txout.scriptPubKey starts with scriptPubKey instead of full match,
@@ -912,9 +920,15 @@ UniValue getreceivedbyaddress(const UniValue& params, bool fHelp)
 
     // Tally
     CAmount nAmount = 0;
+#if 0
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
         const CWalletTx& wtx = (*it).second;
+#else
+    for (auto it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+    {
+        const CWalletTx& wtx = *((*it).second);
+#endif
         if (wtx.IsCoinBase() || !CheckFinalTx(wtx))
             continue;
 
@@ -972,9 +986,15 @@ UniValue getreceivedbyaccount(const UniValue& params, bool fHelp)
 
     // Tally
     CAmount nAmount = 0;
+#if 0
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
         const CWalletTx& wtx = (*it).second;
+#else
+    for (auto it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+    {
+        const CWalletTx& wtx = *((*it).second);
+#endif
         if (wtx.IsCoinBase() || !CheckFinalTx(wtx))
             continue;
 
@@ -996,9 +1016,15 @@ CAmount GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMi
     CAmount nBalance = 0;
 
     // Tally wallet transactions
+#if 0
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
         const CWalletTx& wtx = (*it).second;
+#else
+    for (auto it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+    {
+        const CWalletTx& wtx = *((*it).second);
+#endif
         if (!CheckFinalTx(wtx) || wtx.GetBlocksToMaturity() > 0 || wtx.GetDepthInMainChain() < 0)
             continue;
 
@@ -1065,9 +1091,15 @@ UniValue getbalance(const UniValue& params, bool fHelp)
         // (GetBalance() sums up all unspent TxOuts)
         // getbalance and "getbalance * 1 true" should return the same number
         CAmount nBalance = 0;
+#if 0
         for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
         {
             const CWalletTx& wtx = (*it).second;
+#else
+        for (auto it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+        {
+            const CWalletTx& wtx = *((*it).second);
+#endif
             if (!CheckFinalTx(wtx) || wtx.GetBlocksToMaturity() > 0 || wtx.GetDepthInMainChain() < 0)
                 continue;
 
@@ -1449,9 +1481,15 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts)
 
     // Tally
     map<CBitcoinAddress, tallyitem> mapTally;
+#if 0
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
         const CWalletTx& wtx = (*it).second;
+#else
+    for (auto it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+    {
+        const CWalletTx& wtx = *((*it).second);
+#endif
 
         if (wtx.IsCoinBase() || !CheckFinalTx(wtx))
             continue;
@@ -1898,9 +1936,15 @@ UniValue listaccounts(const UniValue& params, bool fHelp)
             mapAccountBalances[entry.second.name] = 0;
     }
 
+#if 0
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
         const CWalletTx& wtx = (*it).second;
+#else
+    for (auto it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+    {
+        const CWalletTx& wtx = *((*it).second);
+#endif
         CAmount nFee;
         string strSentAccount;
         list<COutputEntry> listReceived;
@@ -2010,10 +2054,15 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
 
     UniValue transactions(UniValue::VARR);
 
-    for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); it++)
+#if 0
+    for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
-        CWalletTx tx = (*it).second;
-
+        const CWalletTx& tx = (*it).second;
+#else
+    for (auto it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+    {
+        const CWalletTx& tx = *((*it).second);
+#endif
         if (depth == -1 || tx.GetDepthInMainChain() < depth)
             ListTransactions(tx, "*", 0, true, transactions, filter);
     }
@@ -2093,7 +2142,11 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
     UniValue entry(UniValue::VOBJ);
     if (!pwalletMain->mapWallet.count(hash))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid or non-wallet transaction id");
+#if 0
     const CWalletTx& wtx = pwalletMain->mapWallet[hash];
+#else
+    const CWalletTx& wtx = *(pwalletMain->mapWallet[hash]);
+#endif
 
     CAmount nOut = wtx.GetValueOut();
 

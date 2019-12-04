@@ -85,7 +85,7 @@ class headers(BitcoinTestFramework):
 
         blocks.append(self.nodes[0].getblockhash(0))
         print("\n\nGenesis block is:\n" + blocks[0] + "\n")
-        raw_input("press enter to go on..")
+        #raw_input("press enter to go on..")
 
         s = "Node 0 generates a block"
         print("\n" + s) 

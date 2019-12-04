@@ -665,7 +665,6 @@ public:
     // inputs must be known to compute value in.
     virtual CAmount GetValueIn(const CCoinsViewCache& view) const = 0;
 
-    virtual bool IsCoinBase() const = 0;
 
     friend bool operator==(const CTransactionBase& a, const CTransactionBase& b)
     {
@@ -693,14 +692,15 @@ public:
 
     virtual void AddToBlock(CBlock* pblock) const = 0;
 
-    // default values for derived classes not supporting CTransaction specific data structures
+    // default values for derived classes not supporting specific data structures
+    virtual bool IsCoinBase() const { return false; };
+    virtual bool IsCoinCertified() const { return false; }
+
     // Return sum of JoinSplit vpub_new if supported
     virtual CAmount GetJoinSplitValueIn() const { return 0; };
     virtual bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const { return true; };
     virtual void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const { return; };
     virtual bool HaveInputs(const CCoinsViewCache& view) const { return true; };
-    virtual void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const { return; }
-    virtual void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const { return; }
     virtual bool AreInputsStandard(CCoinsViewCache& view) const { return true; };
     virtual unsigned int GetP2SHSigOpCount(CCoinsViewCache& view) const { return 0; }
     virtual unsigned int GetLegacySigOpCount() const { return 0; }
@@ -723,6 +723,8 @@ public:
     virtual void SyncWithWallets(const CBlock* pblock = NULL) const = 0;
     virtual bool CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const = 0;
     virtual double GetPriority(const CCoinsViewCache &view, int nHeight) const = 0;
+    virtual void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const = 0;
+    virtual void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const = 0;
 };
 
 struct CMutableTransaction;

@@ -87,8 +87,13 @@ public:
     //! as new tx version will probably only be introduced at certain heights
     int nVersion;
 
+#if 0
     void FromTx(const CTransaction &tx, int nHeightIn) {
         fCoinBase = tx.IsCoinBase();
+#else
+    void FromTx(const CTransactionBase &tx, int nHeightIn) {
+        fCoinBase = tx.IsCoinBase() || tx.IsCoinCertified();
+#endif
         vout = tx.vout;
         nHeight = nHeightIn;
         nVersion = tx.nVersion;
@@ -151,6 +156,17 @@ public:
 
     bool IsCoinBase() const {
         return fCoinBase;
+    }
+
+    bool IsCoinCertified() const {
+#if 0
+        if (nVersion != 1 && nVersion != -4)
+        {
+            std::cout << "Version: " << std::hex << nVersion << std::endl;
+        }
+#endif
+        // when restored from serialization, nVersion is populated only with latest 7 bits of the original value!
+        return (fCoinBase && ( (nVersion & 0x7f) == (SC_TX_VERSION & 0x7f)) );
     }
 
     unsigned int GetSerializeSize(int nType, int nVersion) const {

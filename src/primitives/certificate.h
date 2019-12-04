@@ -65,6 +65,7 @@ public:
     CAmount GetFeeAmount(CAmount valueIn) const;
 
     bool IsCoinBase() const { return false; }
+    bool IsCoinCertificate() const { return true; }
 
     friend bool operator==(const CScCertificate& a, const CScCertificate& b)
     {
@@ -93,7 +94,10 @@ public:
     bool ContextualCheckInputs(CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
           const CChain& chain, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams,
           std::vector<CScriptCheck> *pvChecks = NULL) const { return true; /* TODO */}
-    void SyncWithWallets(const CBlock* pblock = NULL) const {/* TODO */};
+
+    void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const;
+    void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const;
+    void SyncWithWallets(const CBlock* pblock = NULL) const;
 
     // certificates does not have inputs, therefore is ok to return true
     bool CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const { return true; }

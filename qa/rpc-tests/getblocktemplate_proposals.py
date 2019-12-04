@@ -94,7 +94,7 @@ def assert_template(node, tmpl, txlist, expect):
 #        raw_input("Pres to continue 1...")
      rsp = node.getblocktemplate({'data':template_to_hex(tmpl, txlist),'mode':'proposal'})
      if rsp != expect:
-#         print "rsp: ", rsp
+         print "rsp: ", rsp
          raise AssertionError('unexpected: %s' % (rsp,))
 #    except JSONRPCException as e:
 #            print "exception: ", e.error['message']
