@@ -17,6 +17,7 @@
 #include "consensus/validation.h"
 #include "validationinterface.h"
 #include "undo.h"
+#include "core_io.h"
 
 JSDescription JSDescription::getNewInstance(bool useGroth) {
 	JSDescription js;
@@ -280,9 +281,16 @@ CTransactionBase::CTransactionBase() :
     nVersion(TRANSPARENT_TX_VERSION), vout() {}
 
 CTransactionBase& CTransactionBase::operator=(const CTransactionBase &tx) {
+    *const_cast<uint256*>(&hash) = tx.hash;
     *const_cast<int*>(&nVersion) = tx.nVersion;
     *const_cast<std::vector<CTxOut>*>(&vout) = tx.vout;
     return *this;
+}
+
+CTransactionBase::CTransactionBase(const CTransactionBase &tx) : nVersion(TRANSPARENT_TX_VERSION) {
+    *const_cast<uint256*>(&hash) = tx.hash;
+    *const_cast<int*>(&nVersion) = tx.nVersion;
+    *const_cast<std::vector<CTxOut>*>(&vout) = tx.vout;
 }
 
 double CTransactionBase::ComputePriority(double dPriorityInputs, unsigned int nTxSize) const
@@ -306,11 +314,10 @@ void CTransaction::UpdateHash() const
 }
 
 CTransaction::CTransaction(const CMutableTransaction &tx) :
-    vsc_ccout(tx.vsc_ccout), vcl_ccout(tx.vcl_ccout), vft_ccout(tx.vft_ccout),
+    vin(tx.vin), vsc_ccout(tx.vsc_ccout), vcl_ccout(tx.vcl_ccout), vft_ccout(tx.vft_ccout),
     nLockTime(tx.nLockTime), vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig)
 {
     *const_cast<int*>(&nVersion) = tx.nVersion;
-    *const_cast<std::vector<CTxIn>*>(&vin) = tx.vin;
     *const_cast<std::vector<CTxOut>*>(&vout) = tx.vout;
     UpdateHash();
 }
@@ -321,12 +328,29 @@ CTransaction& CTransaction::operator=(const CTransaction &tx) {
     *const_cast<std::vector<CTxScCreationOut>*>(&vsc_ccout) = tx.vsc_ccout;
     *const_cast<std::vector<CTxCertifierLockOut>*>(&vcl_ccout) = tx.vcl_ccout;
     *const_cast<std::vector<CTxForwardTransferOut>*>(&vft_ccout) = tx.vft_ccout;
-    *const_cast<unsigned int*>(&nLockTime) = tx.nLockTime;
+    *const_cast<uint32_t*>(&nLockTime) = tx.nLockTime;
     *const_cast<std::vector<JSDescription>*>(&vjoinsplit) = tx.vjoinsplit;
     *const_cast<uint256*>(&joinSplitPubKey) = tx.joinSplitPubKey;
     *const_cast<joinsplit_sig_t*>(&joinSplitSig) = tx.joinSplitSig;
-    *const_cast<uint256*>(&hash) = tx.hash;
+//    *const_cast<uint256*>(&hash) = tx.hash;
     return *this;
+}
+
+CTransaction::CTransaction(const CTransaction &tx) : nLockTime(0)
+{
+    // call explicitly the copy of members of virtual base class
+    *const_cast<uint256*>(&hash) = tx.hash;
+    *const_cast<int*>(&nVersion) = tx.nVersion;
+    *const_cast<std::vector<CTxOut>*>(&vout) = tx.vout;
+    //---
+    *const_cast<std::vector<CTxIn>*>(&vin) = tx.vin;
+    *const_cast<std::vector<CTxScCreationOut>*>(&vsc_ccout) = tx.vsc_ccout;
+    *const_cast<std::vector<CTxCertifierLockOut>*>(&vcl_ccout) = tx.vcl_ccout;
+    *const_cast<std::vector<CTxForwardTransferOut>*>(&vft_ccout) = tx.vft_ccout;
+    *const_cast<uint32_t*>(&nLockTime) = tx.nLockTime;
+    *const_cast<std::vector<JSDescription>*>(&vjoinsplit) = tx.vjoinsplit;
+    *const_cast<uint256*>(&joinSplitPubKey) = tx.joinSplitPubKey;
+    *const_cast<joinsplit_sig_t*>(&joinSplitSig) = tx.joinSplitSig;
 }
 
 unsigned int CTransaction::CalculateModifiedSize(unsigned int nTxSize) const
@@ -515,6 +539,7 @@ bool CTransaction::ContextualCheckInputs(CValidationState &state, const CCoinsVi
 void CTransaction::SyncWithWallets(const CBlock* pblock) const { }
 bool CTransaction::CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const { return true; }
 double CTransaction::GetPriority(const CCoinsViewCache &view, int nHeight) const { return 0.0; }
+std::string CTransaction::EncodeHex() const { return ""; }
 
 #else
 //----- 
@@ -726,4 +751,10 @@ double CTransaction::GetPriority(const CCoinsViewCache &view, int nHeight) const
     return view.GetPriority(*this, nHeight);
 #endif
 }
+
+std::string CTransaction::EncodeHex() const
+{
+    return EncodeHexTx(*this);
+}
+
 #endif // BITCOIN_TX

@@ -9,6 +9,7 @@
 
 class UniValue;
 class CTransaction;
+class CTransactionBase;
 class CMutableTransaction;
 class CMutableTransactionBase;
 
@@ -61,7 +62,11 @@ class CcRecipientAmountVisitor : public boost::static_visitor<CAmount>
 };
 
 // used in get tx family of rpc commands
+#if 0
 void AddSidechainOutsToJSON (const CTransaction& tx, UniValue& parentObj);
+#else
+void AddSidechainOutsToJSON (const CTransactionBase& tx, UniValue& parentObj);
+#endif
 
 // used when creating a raw transaction with cc outputs
 bool AddSidechainCreationOutputs(UniValue& sc_crs, CMutableTransaction& rawTx, std::string& error);

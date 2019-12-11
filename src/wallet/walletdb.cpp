@@ -55,14 +55,30 @@ bool CWalletDB::ErasePurpose(const string& strPurpose)
     return Erase(make_pair(string("purpose"), strPurpose));
 }
 
+#if 0
 bool CWalletDB::WriteTx(uint256 hash, const CWalletTx& wtx)
+#else
+bool CWalletDB::WriteTx(uint256 hash, const CWalletObjBase& obj)
+#endif
 {
-    nWalletDBUpdated++;
-    return Write(std::make_pair(std::string("tx"), hash), wtx);
+    // TODO handle with a virtual in parent class?
+    const CWalletTx* p = dynamic_cast<const CWalletTx*>(&obj);
+    if (p != 0)
+    {
+        nWalletDBUpdated++;
+        return Write(std::make_pair(std::string("tx"), hash), *p);
+    }
+    else
+    {
+        //TODO handle certificates
+        LogPrintf("%s():%d - certificates to be handled\n");
+        return false;
+    }
 }
 
 bool CWalletDB::EraseTx(uint256 hash)
 {
+    // TODO handle cetificates
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("tx"), hash));
 }
@@ -306,7 +322,11 @@ DBErrors CWalletDB::ReorderTransactions(CWallet* pwallet)
     // Probably a bad idea to change the output of this
 
     // First: get all CWalletTx and CAccountingEntry into a sorted-by-time multimap.
+#if 0
     typedef pair<CWalletTx*, CAccountingEntry*> TxPair;
+#else
+    typedef pair<CWalletObjBase*, CAccountingEntry*> TxPair;
+#endif
     typedef multimap<int64_t, TxPair > TxItems;
     TxItems txByTime;
 
@@ -317,7 +337,7 @@ DBErrors CWalletDB::ReorderTransactions(CWallet* pwallet)
 #else
     for (auto it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it)
     {
-        CWalletTx* wtx = it->second.get();
+        auto* wtx = it->second.get();
 #endif
         txByTime.insert(make_pair(wtx->nTimeReceived, TxPair(wtx, (CAccountingEntry*)0)));
     }
@@ -325,7 +345,11 @@ DBErrors CWalletDB::ReorderTransactions(CWallet* pwallet)
     ListAccountCreditDebit("", acentries);
     BOOST_FOREACH(CAccountingEntry& entry, acentries)
     {
+#if 0
         txByTime.insert(make_pair(entry.nTime, TxPair((CWalletTx*)0, &entry)));
+#else
+        txByTime.insert(make_pair(entry.nTime, TxPair((CWalletObjBase*)0, &entry)));
+#endif
     }
 
     int64_t& nOrderPosNext = pwallet->nOrderPosNext;
@@ -333,7 +357,11 @@ DBErrors CWalletDB::ReorderTransactions(CWallet* pwallet)
     std::vector<int64_t> nOrderPosOffsets;
     for (TxItems::iterator it = txByTime.begin(); it != txByTime.end(); ++it)
     {
+#if 0
         CWalletTx *const pwtx = (*it).second.first;
+#else
+        auto *const pwtx = (*it).second.first;
+#endif
         CAccountingEntry *const pacentry = (*it).second.second;
         int64_t& nOrderPos = (pwtx != 0) ? pwtx->nOrderPos : pacentry->nOrderPos;
 

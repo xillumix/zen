@@ -12,8 +12,22 @@ extern CFeeRate minRelayTxFee;
 namespace Sidechain
 {
 
+#if 0
 void AddSidechainOutsToJSON (const CTransaction& tx, UniValue& parentObj)
 {
+#else
+    // TODO add a virtual method to base class which calls this
+void AddSidechainOutsToJSON (const CTransactionBase& obj, UniValue& parentObj)
+{
+    const CTransaction* ptx = dynamic_cast<const CTransaction*>(&obj);
+    if (!ptx)
+    {
+        // nothing to do
+        return;
+    }
+    const CTransaction& tx = *ptx;
+#endif
+
     UniValue vscs(UniValue::VARR);
     // global idx
     unsigned int nIdx = 0; 

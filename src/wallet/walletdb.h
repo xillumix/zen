@@ -26,6 +26,7 @@ class CMasterKey;
 class CScript;
 class CWallet;
 class CWalletTx;
+class CWalletObjBase;
 class uint160;
 class uint256;
 
@@ -87,7 +88,11 @@ public:
     bool WritePurpose(const std::string& strAddress, const std::string& purpose);
     bool ErasePurpose(const std::string& strAddress);
 
+#if 0
     bool WriteTx(uint256 hash, const CWalletTx& wtx);
+#else
+    bool WriteTx(uint256 hash, const CWalletObjBase& wtx);
+#endif
     bool EraseTx(uint256 hash);
 
     bool WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, const CKeyMetadata &keyMeta);

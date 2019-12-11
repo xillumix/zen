@@ -1684,7 +1684,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 #if 0
                         CWalletTx* copyTo = &mi->second;
 #else
-                        CWalletTx* copyTo = mi->second.get();
+                        CWalletObjBase* copyTo = mi->second.get();
 #endif
                         copyTo->mapValue = copyFrom->mapValue;
                         copyTo->vOrderForm = copyFrom->vOrderForm;

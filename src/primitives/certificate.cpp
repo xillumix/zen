@@ -3,6 +3,8 @@
 #include "undo.h"
 #include "coins.h"
 #include "validationinterface.h"
+#include "coins.h"
+#include "core_io.h"
 
 CScCertificate::CScCertificate() : CTransactionBase(), scId(), totalAmount(), vbt_ccout(), nonce() { }
 
@@ -88,6 +90,11 @@ unsigned int CScCertificate::CalculateModifiedSize(unsigned int /* unused nTxSiz
 unsigned int CScCertificate::CalculateSize() const
 {
     return ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION);
+}
+
+std::string CScCertificate::EncodeHex() const
+{
+    return EncodeHexCert(*this);
 }
 
 uint256 CMutableScCertificate::GetHash() const

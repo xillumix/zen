@@ -2664,7 +2664,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         nSigOps += GetLegacySigOpCount(tx);
 #else
     std::vector<const CTransactionBase*> vTxBase;
-    /*
     vTxBase.reserve(block.vtx.size() + block.vcert.size()); 
 
     for (unsigned int i = 0; i < block.vtx.size(); i++)
@@ -2675,8 +2674,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     {
         vTxBase.push_back(&(block.vcert[i]));
     }
-    */
-    block.GetTxAndCertsVector(vTxBase);
 
     for (unsigned int i = 0; i < vTxBase.size(); i++)
     {

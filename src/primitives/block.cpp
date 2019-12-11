@@ -158,7 +158,11 @@ std::vector<uint256> CBlock::GetMerkleBranch(int nIndex) const
         BuildMerkleTree();
     std::vector<uint256> vMerkleBranch;
     int j = 0;
+#if 0
     for (int nSize = vtx.size(); nSize > 1; nSize = (nSize + 1) / 2)
+#else
+    for (int nSize = (vtx.size() + vcert.size()); nSize > 1; nSize = (nSize + 1) / 2)
+#endif
     {
         int i = std::min(nIndex^1, nSize-1);
         vMerkleBranch.push_back(vMerkleTree[j+i]);
@@ -174,11 +178,21 @@ uint256 CBlock::CheckMerkleBranch(uint256 hash, const std::vector<uint256>& vMer
         return uint256();
     for (std::vector<uint256>::const_iterator it(vMerkleBranch.begin()); it != vMerkleBranch.end(); ++it)
     {
+#ifdef DEBUG_MERKLE_BRANCH
+        std::cout << " -------------------------------------------" << std::endl;
+        std::cout << "  idx:  " << index << std::endl;
+        std::cout << "    hash1:  " << (*it).ToString() << std::endl;
+        std::cout << "    hash1:  " << hash.ToString() << std::endl;
+#endif
         if (nIndex & 1)
             hash = Hash(BEGIN(*it), END(*it), BEGIN(hash), END(hash));
         else
             hash = Hash(BEGIN(hash), END(hash), BEGIN(*it), END(*it));
         nIndex >>= 1;
+#ifdef DEBUG_MERKLE_BRANCH
+        std::cout << "  leaf hash: " << hash.ToString() << std::endl;
+#endif
+
     }
     return hash;
 }

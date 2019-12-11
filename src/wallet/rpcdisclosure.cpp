@@ -97,18 +97,24 @@ UniValue z_getpaymentdisclosure(const UniValue& params, bool fHelp)
     }
 #if 0
     const CWalletTx& wtx = pwalletMain->mapWallet[hash];
-#else
-    const CWalletTx& wtx = *(pwalletMain->mapWallet[hash]);
-#endif
-
     // Check if shielded tx
     if (wtx.vjoinsplit.empty()) {
+#else
+    const CWalletObjBase& wtx = *(pwalletMain->mapWallet[hash]);
+
+    // Check if shielded tx
+    if (wtx.getVjoinsplitSize() == 0) {
+#endif
         throw JSONRPCError(RPC_MISC_ERROR, "Transaction is not a shielded transaction");
     }
 
     // Check js_index
     int js_index = params[1].get_int();
+#if 0
     if (js_index < 0 || js_index >= wtx.vjoinsplit.size()) {
+#else
+    if (js_index < 0 || js_index >= wtx.getVjoinsplitSize()) {
+#endif
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid js_index");
     }
 
@@ -134,7 +140,11 @@ UniValue z_getpaymentdisclosure(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_DATABASE_ERROR, "Could not find payment disclosure info for the given joinsplit output");
     }
 
+#if 0
     PaymentDisclosure pd( wtx.joinSplitPubKey, key, info, msg );
+#else
+    PaymentDisclosure pd( wtx.getJoinSplitPubKey(), key, info, msg );
+#endif
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << pd;
     string strHex = HexStr(ss.begin(), ss.end());

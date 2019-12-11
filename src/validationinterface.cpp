@@ -55,6 +55,6 @@ void SyncWithWallets(const CTransaction &tx, const CBlock *pblock) {
     g_signals.SyncTransaction(tx, pblock);
 }
 
-void SyncWithWallets(const CScCertificate &cert, const CBlock *pblock) {
-    g_signals.SyncCertificate(cert, pblock);
+void SyncWithWallets(const CScCertificate &tx, const CBlock *pblock) {
+    g_signals.SyncCertificate(tx, pblock);
 }

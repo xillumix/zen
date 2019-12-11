@@ -617,7 +617,7 @@ bool AsyncRPCOperation_sendmany::main_impl() {
 #if 0
                 const CWalletTx& wtx = pwalletMain->mapWallet[jso.hash];
 #else
-                const CWalletTx& wtx = *(pwalletMain->mapWallet[jso.hash]);
+                const CWalletObjBase& wtx = *(pwalletMain->mapWallet[jso.hash]);
 #endif
                 // Zero confirmaton notes belong to transactions which have not yet been mined
                 if (mapBlockIndex.find(wtx.hashBlock) == mapBlockIndex.end()) {

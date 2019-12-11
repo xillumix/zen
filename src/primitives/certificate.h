@@ -7,7 +7,7 @@
 struct CMutableScCertificate;
 class CTxBackwardTransferCrosschainOut;
 
-class CScCertificate : public CTransactionBase
+class CScCertificate : virtual public CTransactionBase
 {
     /** Memory only. */
     void UpdateHash() const override;
@@ -78,7 +78,8 @@ public:
     }
 
     unsigned int CalculateSize() const override;
-    unsigned int CalculateModifiedSize(unsigned int /* unused nTxSize*/) const;
+    unsigned int CalculateModifiedSize(unsigned int /* unused nTxSize*/) const override;
+    std::string EncodeHex() const override;
 
     std::string ToString() const override;
 

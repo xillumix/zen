@@ -645,6 +645,7 @@ public:
     /** Construct a CTransactionBase that qualifies as IsNull() */
     CTransactionBase();
     CTransactionBase& operator=(const CTransactionBase& tx);
+    CTransactionBase(const CTransactionBase& tx);
     virtual ~CTransactionBase() {};
 
     template <typename Stream>
@@ -684,6 +685,7 @@ public:
 
     // Compute tx size
     virtual unsigned int CalculateSize() const = 0;
+    virtual std::string EncodeHex() const = 0;
 
     // Compute modified tx size for priority calculation (optionally given tx size)
     virtual unsigned int CalculateModifiedSize(unsigned int nTxSize=0) const = 0;
@@ -706,6 +708,7 @@ public:
     virtual unsigned int GetLegacySigOpCount() const { return 0; }
     virtual CAmount GetValueCcOut() const { return 0; };
     virtual size_t getVjoinsplitSize() const { return 0; };
+    virtual const uint256 getJoinSplitPubKey() const { return uint256(); }
     virtual int GetComplexity() const { return 0; }
 
     virtual int GetNumbOfInputs() const { return 0; }
@@ -713,7 +716,7 @@ public:
     virtual bool Check(CValidationState& state, libzcash::ProofVerifier& verifier) const = 0;
     virtual bool ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const = 0;
     virtual bool IsStandard(std::string& reason, int nHeight) const = 0;
-    virtual bool CheckFinal(int flags) const = 0;
+    virtual bool CheckFinal(int flags = -1) const = 0;
     virtual bool IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const = 0;
     virtual bool HasNoInputsInMempool(const CTxMemPool& pool) const = 0;
     virtual bool IsApplicableToState() const = 0;
@@ -732,8 +735,9 @@ struct CMutableTransaction;
 /** The basic transaction that is broadcasted on the network and contained in
  * blocks.  A transaction can contain multiple inputs and outputs.
  */
-class CTransaction : public CTransactionBase
+class CTransaction : virtual public CTransactionBase
 {
+protected:
     void UpdateHash() const;
 
 public:
@@ -767,6 +771,7 @@ public:
     CTransaction(const CMutableTransaction &tx);
 
     CTransaction& operator=(const CTransaction& tx);
+    CTransaction(const CTransaction& tx);
 
     ADD_SERIALIZE_METHODS;
 
@@ -807,6 +812,8 @@ public:
     unsigned int CalculateSize() const override;
     unsigned int CalculateModifiedSize(unsigned int nTxSize) const override;
 
+    std::string EncodeHex() const override;
+
     bool IsCoinBase() const
     {
         return (vin.size() == 1 && vin[0].prevout.IsNull());
@@ -842,6 +849,7 @@ public:
 
     size_t getVjoinsplitSize() const { return vjoinsplit.size(); };
     int GetComplexity() const { return vin.size()*vin.size(); }
+    const uint256 getJoinSplitPubKey() const { return joinSplitPubKey; }
 
     std::string ToString() const;
 
@@ -918,7 +926,7 @@ public:
     bool Check(CValidationState& state, libzcash::ProofVerifier& verifier) const;
     bool ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const;
     bool IsStandard(std::string& reason, int nHeight) const;
-    bool CheckFinal(int flags) const;
+    bool CheckFinal(int flags = -1) const;
     bool IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const;
     bool HasNoInputsInMempool(const CTxMemPool& pool) const;
     bool IsApplicableToState() const;
