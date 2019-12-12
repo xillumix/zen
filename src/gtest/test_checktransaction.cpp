@@ -8,22 +8,19 @@
 
 TEST(checktransaction_tests, check_vpub_not_both_nonzero) {
     CMutableTransaction tx;
-    tx.nVersion = 2;
+    tx.nVersion = PHGR_TX_VERSION;
 
-    {
-        // Ensure that values within the joinsplit are well-formed.
-        CMutableTransaction newTx(tx);
-        CValidationState state;
+    CMutableTransaction newTx(tx);
+    CValidationState state;
 
-        newTx.vjoinsplit.push_back(JSDescription());
+    newTx.vjoinsplit.push_back(JSDescription());
 
-        JSDescription *jsdesc = &newTx.vjoinsplit[0];
-        jsdesc->vpub_old = 1;
-        jsdesc->vpub_new = 1;
+    JSDescription *jsdesc = &newTx.vjoinsplit[0];
+    jsdesc->vpub_old = 1;
+    jsdesc->vpub_new = 1;
 
-        EXPECT_FALSE(CheckTransactionWithoutProofVerification(newTx, state));
-        EXPECT_EQ(state.GetRejectReason(), "bad-txns-vpubs-both-nonzero");
-    }
+    EXPECT_FALSE(CheckTransactionWithoutProofVerification(newTx, state));
+    EXPECT_EQ(state.GetRejectReason(), "bad-txns-vpubs-both-nonzero");
 }
 
 class MockCValidationState : public CValidationState {
@@ -48,7 +45,7 @@ CMutableTransaction GetValidTransaction(int txVersion) {
     CMutableTransaction mtx;
 	mtx.nVersion = txVersion;
     mtx.vin.resize(2);
-    mtx.vin[0].prevout.hash = uint256S("0000000000000000000000000000000000000000000000000000000000000001");
+    mtx.vin[0].prevout.hash = uint256S("0000000000000000000000000000000000000000000000000000000000000001"); //abenegia: are these zeros really necessary?
     mtx.vin[0].prevout.n = 0;
     mtx.vin[1].prevout.hash = uint256S("0000000000000000000000000000000000000000000000000000000000000002");
     mtx.vin[1].prevout.n = 0;
@@ -459,5 +456,253 @@ TEST(checktransaction_tests, PhgrTxVersion) {
 	EXPECT_FALSE(ContextualCheckTransaction(tx, state, 200, 100));
 }
 
+///////////////////////////////////////////////////////////////////////////////
+/////////////////////////// SideChain-related tests ///////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
+class CheckSidechainTxTestSuite: public ::testing::Test {
+
+public:
+    CheckSidechainTxTestSuite() {};
+
+    ~CheckSidechainTxTestSuite() {};
+
+    void SetUp() override {};
+
+    void TearDown() override {};
+};
+
+
+TEST_F(CheckSidechainTxTestSuite, SideChain_CMutableTransaction_CopyCtor_ScOutputsAreCopied) {
+    CMutableTransaction aMutableTx;
+    aMutableTx.nVersion = SC_TX_VERSION;
+
+    CTxScCreationOut aSideChainCreationTx;
+    aSideChainCreationTx.scId = uint256S("1987");
+    aMutableTx.vsc_ccout.push_back(aSideChainCreationTx);
+
+    //prerequisites
+    ASSERT_TRUE(aMutableTx.IsScVersion())<<"Test requires at least a side chain tx";
+    ASSERT_TRUE(aMutableTx.vsc_ccout.size() != 0)<<"Test requires at least a ScCreationOut inserted";
+
+    //test
+    CMutableTransaction aCopyOfMutableTx(aMutableTx);
+
+    //checks
+    EXPECT_TRUE(aCopyOfMutableTx.IsScVersion());
+    EXPECT_TRUE(aCopyOfMutableTx.vsc_ccout == aMutableTx.vsc_ccout);
+}
+
+TEST_F(CheckSidechainTxTestSuite, SideChain_CMutableTransaction_CopyCtor_FwdTransferOutputsAreCopied) {
+    CMutableTransaction aMutableTx;
+    aMutableTx.nVersion = SC_TX_VERSION;
+
+    CTxForwardTransferOut aForwardTransferTx;
+    aForwardTransferTx.scId = uint256S("1987");
+    aForwardTransferTx.nValue = CAmount(1999);
+    aMutableTx.vft_ccout.push_back(aForwardTransferTx);
+
+    //prerequisites
+    ASSERT_TRUE(aMutableTx.IsScVersion())<<"Test requires at least a side chain tx";
+    ASSERT_TRUE(aMutableTx.vft_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
+
+    //test
+    CMutableTransaction aCopyOfMutableTx(aMutableTx);
+
+    //checks
+    EXPECT_TRUE(aCopyOfMutableTx.IsScVersion());
+    EXPECT_TRUE(aCopyOfMutableTx.vft_ccout == aMutableTx.vft_ccout);
+}
+
+TEST_F(CheckSidechainTxTestSuite, SideChain_CTransaction_AssignmentOp_ScOutputsAreCopied) {
+    CMutableTransaction aMutableTx;
+    aMutableTx.nVersion = SC_TX_VERSION;
+
+    CTxScCreationOut aSideChainCreationTx;
+    aSideChainCreationTx.scId = uint256S("1987");
+    aMutableTx.vsc_ccout.push_back(aSideChainCreationTx);
+
+    CTransaction aTx(aMutableTx);
+    CTransaction aCopyOfTx;
+
+    //prerequisites
+    ASSERT_TRUE(aTx.IsScVersion())<<"Test requires at least a side chain tx";
+    ASSERT_TRUE(aTx.vsc_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
+
+    //test
+    aCopyOfTx = aTx;
+
+    //checks
+    EXPECT_TRUE(aCopyOfTx.IsScVersion());
+    EXPECT_TRUE(aCopyOfTx.vft_ccout == aTx.vft_ccout);
+}
+
+TEST_F(CheckSidechainTxTestSuite, SideChain_CTransaction_AssignmentOp_FwdTransferOutputsAreCopied) {
+    CMutableTransaction aMutableTx;
+    aMutableTx.nVersion = SC_TX_VERSION;
+
+    CTxForwardTransferOut aForwardTransferTx;
+    aForwardTransferTx.scId = uint256S("1987");
+    aForwardTransferTx.nValue = CAmount(1999);
+    aMutableTx.vft_ccout.push_back(aForwardTransferTx);
+
+    CTransaction aTx(aMutableTx);
+    CTransaction aCopyOfTx;
+
+    //prerequisites
+    ASSERT_TRUE(aTx.IsScVersion())<<"Test requires at least a side chain tx";
+    ASSERT_TRUE(aTx.vft_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
+
+    //test
+    aCopyOfTx = aTx;
+
+    //checks
+    EXPECT_TRUE(aCopyOfTx.IsScVersion());
+    EXPECT_TRUE(aCopyOfTx.vft_ccout == aTx.vft_ccout);
+}
+
+/////////////////////////// CTxForwardTransferOut
+TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_DefaultCtorCreatesNullOutput) {
+    //test
+    CTxForwardTransferOut aNullFwrTransferOutput;
+
+    //checks
+    EXPECT_TRUE(aNullFwrTransferOutput.IsNull());
+}
+
+TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_AmountSetToMinus1MakesOutputNull) {
+    CTxForwardTransferOut aNullFwrTransferOutput(CAmount(-1), uint256S("1989"), uint256S("2008"));
+
+    //prerequisites
+    ASSERT_TRUE(aNullFwrTransferOutput.nValue == CAmount(-1))<<"Test requires amount set to -1";
+    ASSERT_FALSE(aNullFwrTransferOutput.scId.IsNull())<<"Test requires not null scId";
+    ASSERT_FALSE(aNullFwrTransferOutput.address.IsNull())<<"Test requires not null address";
+
+
+    //test
+    bool res = aNullFwrTransferOutput.IsNull();
+
+    //checks
+    EXPECT_TRUE(res);
+}
+
+TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_NoNegativeAmountMakeOutputNotNull) {
+    CTxForwardTransferOut aNullFwrTransferOutput(CAmount(0), uint256S(""), uint256S(""));
+
+    //prerequisites
+    ASSERT_TRUE(aNullFwrTransferOutput.nValue > CAmount(-1))<<"Test requires amount set to non negative value";
+    ASSERT_TRUE(aNullFwrTransferOutput.scId.IsNull())<<"Test requires null scId";
+    ASSERT_TRUE(aNullFwrTransferOutput.address.IsNull())<<"Test requires null address";
+
+    //test
+    bool res = aNullFwrTransferOutput.IsNull();
+
+    //checks
+    EXPECT_FALSE(res);
+}
+
+TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_NegativeAmountMakeOutputNotNull) {
+    CTxForwardTransferOut aNullFwrTransferOutput(CAmount(-2), uint256S(""), uint256S(""));
+
+    //prerequisites
+    ASSERT_TRUE(aNullFwrTransferOutput.nValue < CAmount(-1))<<"Test requires amount set to negative value different from -1";
+    ASSERT_TRUE(aNullFwrTransferOutput.scId.IsNull())<<"Test requires null scId";
+    ASSERT_TRUE(aNullFwrTransferOutput.address.IsNull())<<"Test requires null address";
+
+    //test
+    bool res = aNullFwrTransferOutput.IsNull();
+
+    //checks
+    EXPECT_FALSE(res);
+}
+
+TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_CmpOp_ValueAddressAndScIdAreEvaluatedForEqualityAndInequality) {
+    CTxForwardTransferOut lhsOut(CAmount(10), uint256S("1912"), uint256S("1789"));
+    CTxForwardTransferOut rhsOut(CAmount(10), uint256S("1912"), uint256S("1789"));
+
+    CTxForwardTransferOut rhsOut_OddAmount (CAmount(20), uint256S("1912"), uint256S("1789"));
+    CTxForwardTransferOut rhsOut_OddAddress(CAmount(10), uint256S(""),     uint256S("1789"));
+    CTxForwardTransferOut rhsOut_OddScId   (CAmount(10), uint256S("1912"), uint256S("1815"));
+
+    //Prerequisites
+    ASSERT_TRUE(lhsOut.nValue != rhsOut_OddAmount.nValue);
+    ASSERT_TRUE(lhsOut.address != rhsOut_OddAddress.address);
+    ASSERT_TRUE(lhsOut.scId != rhsOut_OddScId.scId);
+
+    //test
+    bool resEq          = lhsOut == rhsOut;
+    bool res_OddAmount  = lhsOut == rhsOut_OddAmount;
+    bool res_OddAddress = lhsOut != rhsOut_OddAddress;
+    bool res_OddScId    = lhsOut != rhsOut_OddScId;
+
+    //checks
+    EXPECT_TRUE(resEq)          <<"Outputs with same amount, address and ScId do not compare equal";
+    EXPECT_FALSE(res_OddAmount) <<"Outputs different amounts do compare equal";
+    EXPECT_TRUE(res_OddAddress) <<"Outputs different address do compare equal";
+    EXPECT_TRUE(res_OddScId)    <<"Outputs different ScId    do compare equal";
+}
+
+TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_NonZeroFeeRate_DustThresholdIsThreeTimesFeeForMinimalTxSize) {
+    CTxForwardTransferOut anOutput;
+    CFeeRate theMinimalFeeRate(CAmount(1000));
+
+    unsigned int minimalOutputSize = GetSerializeSize(SER_DISK,0);
+    unsigned int minimalInputSize  = 148u;
+
+    CAmount expectedDustThreshold = 3 * theMinimalFeeRate.GetFee(minimalInputSize + minimalOutputSize);
+
+    //prerequisites
+    ASSERT_TRUE(theMinimalFeeRate.GetFeePerK() != 0)<<"Test requires non-zero feeRate";
+
+     //test
+    CAmount dustThreshold = anOutput.GetDustThreshold(theMinimalFeeRate);
+
+    //checks
+    EXPECT_TRUE(dustThreshold == expectedDustThreshold)
+        <<"expected dust threshold was "<< expectedDustThreshold
+        <<", while return value is "<<dustThreshold;
+}
+
+TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_ZeroFeeRate_DustThresholdIsThreeTimesFeeForMinimalTxSize) {
+    CTxForwardTransferOut anOutput;
+    CFeeRate theMinimalFeeRate;
+
+    unsigned int minimalOutputSize = GetSerializeSize(SER_DISK,0);
+    unsigned int minimalInputSize  = 148u;
+
+    CAmount expectedDustThreshold = 3 * theMinimalFeeRate.GetFee(minimalInputSize + minimalOutputSize);
+
+    //prerequisites
+    ASSERT_TRUE(theMinimalFeeRate.GetFeePerK() == 0)<<"Test requires zero feeRate";
+
+     //test
+    CAmount dustThreshold = anOutput.GetDustThreshold(theMinimalFeeRate);
+
+    //checks
+    EXPECT_TRUE(dustThreshold == expectedDustThreshold)
+        <<"expected dust threshold was "<< expectedDustThreshold
+        <<", while return value is "<<dustThreshold;
+}
+
+//TEST_F(CheckSidechainTxTestSuite, IsDustCompareAmountWithDustThreshold) {
+//    CFeeRate targetFeeRate(14);
+//    CTxForwardTransferOut anOutputAboveDust(CAmount(7), uint256S(""), uint256S(""));
+//    CTxForwardTransferOut anOutputAtDust(CAmount(6), uint256S(""), uint256S(""));
+//    CTxForwardTransferOut anOutputBelowDust(CAmount(5), uint256S(""), uint256S(""));
+//
+//    //prerequisites
+//    ASSERT_TRUE(anOutputAboveDust.nValue > targetFeeRate.GetFeePerK());
+//    ASSERT_TRUE(anOutputAtDust.nValue == targetFeeRate.GetFeePerK());
+//    ASSERT_TRUE(anOutputBelowDust.nValue < targetFeeRate.GetFeePerK());
+//
+//    //test
+//    bool resAbove = anOutputAboveDust.IsDust(targetFeeRate);
+//    bool resAt = anOutputAtDust.IsDust(targetFeeRate);
+//    bool resBelow = anOutputBelowDust.IsDust(targetFeeRate);
+//
+//    //checks
+//    EXPECT_FALSE(resAbove);
+//    EXPECT_TRUE(resAt);
+//    EXPECT_TRUE(resBelow);
+//}
 
