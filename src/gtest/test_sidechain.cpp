@@ -7,6 +7,8 @@
 #include <undo.h>
 #include <main.h>
 
+#include "gtestUtils.h"
+
 class SidechainTestSuite: public ::testing::Test {
 
 public:
@@ -44,28 +46,15 @@ protected:
     CBlockUndo aBlockUndo;
 
     void preFillSidechainsCollection();
-
-    CTransaction createSidechainTxWith(const uint256 & newScId, const CAmount & fwdTxAmount);
-    CTransaction createFwdTransferTxWith(const uint256 & newScId, const CAmount & fwdTxAmount);
-
-    CTransaction createSidechainTxWithNoFwdTransfer(const uint256 & newScId);
-    CTransaction createTransparentTx(bool ccIsNull);
-    CTransaction createSproutTx(bool ccIsNull);
-    void         extendTransaction(CTransaction & tx, const uint256 & scId, const CAmount & amount);
-
     CBlockUndo   createBlockUndoWith(const uint256 & scId, int height, CAmount amount);
     CBlockUndo   createEmptyBlockUndo();
-
-private:
-    CMutableTransaction populateTx(int txVersion, const uint256 & newScId = uint256S("0"), const CAmount & fwdTxAmount = CAmount(0));
-    void signTx(CMutableTransaction& mtx);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 /////////////////////////// checkTxSemanticValidity ///////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 TEST_F(SidechainTestSuite, TransparentCcNullTxsAreSemanticallyValid) {
-    aTransaction = createTransparentTx(/*ccIsNull = */true);
+    aTransaction = gtestUtils::createTransparentTx(/*ccIsNull = */true);
 
     //test
     bool res = sidechainManager.checkTxSemanticValidity(aTransaction, txState);
@@ -76,7 +65,7 @@ TEST_F(SidechainTestSuite, TransparentCcNullTxsAreSemanticallyValid) {
 }
 
 TEST_F(SidechainTestSuite, TransparentNonCcNullTxsAreNotSemanticallyValid) {
-    aTransaction = createTransparentTx(/*ccIsNull = */false);
+    aTransaction = gtestUtils::createTransparentTx(/*ccIsNull = */false);
 
     //test
     bool res = sidechainManager.checkTxSemanticValidity(aTransaction, txState);
@@ -89,7 +78,7 @@ TEST_F(SidechainTestSuite, TransparentNonCcNullTxsAreNotSemanticallyValid) {
 }
 
 TEST_F(SidechainTestSuite, SproutCcNullTxsAreCurrentlySupported) {
-    aTransaction = createSproutTx(/*ccIsNull = */true);
+    aTransaction = gtestUtils::createSproutTx(/*ccIsNull = */true);
 
     //test
     bool res = sidechainManager.checkTxSemanticValidity(aTransaction, txState);
@@ -100,7 +89,7 @@ TEST_F(SidechainTestSuite, SproutCcNullTxsAreCurrentlySupported) {
 }
 
 TEST_F(SidechainTestSuite, SproutNonCcNullTxsAreCurrentlySupported) {
-    aTransaction = createSproutTx(/*ccIsNull = */false);
+    aTransaction = gtestUtils::createSproutTx(/*ccIsNull = */false);
 
     //test
     bool res = sidechainManager.checkTxSemanticValidity(aTransaction, txState);
@@ -113,7 +102,7 @@ TEST_F(SidechainTestSuite, SproutNonCcNullTxsAreCurrentlySupported) {
 }
 
 TEST_F(SidechainTestSuite, SidechainCreationsWithoutForwardTransferAreNotSemanticallyValid) {
-    aTransaction = createSidechainTxWithNoFwdTransfer(uint256S("1492"));
+    aTransaction = gtestUtils::createSidechainTxWithNoFwdTransfer(uint256S("1492"));
 
     //test
     bool res = sidechainManager.checkTxSemanticValidity(aTransaction, txState);
@@ -126,7 +115,7 @@ TEST_F(SidechainTestSuite, SidechainCreationsWithoutForwardTransferAreNotSemanti
 }
 
 TEST_F(SidechainTestSuite, SidechainCreationsWithPositiveForwardTransferAreSemanticallyValid) {
-    aTransaction = createSidechainTxWith( uint256S("1492"), CAmount(1000));
+    aTransaction = gtestUtils::createSidechainTxWith( uint256S("1492"), CAmount(1000));
 
     //test
     bool res = sidechainManager.checkTxSemanticValidity(aTransaction, txState);
@@ -137,7 +126,7 @@ TEST_F(SidechainTestSuite, SidechainCreationsWithPositiveForwardTransferAreSeman
 }
 
 TEST_F(SidechainTestSuite, SidechainCreationsWithTooLargePositiveForwardTransferAreNotSemanticallyValid) {
-    aTransaction = createSidechainTxWith(uint256S("1492"), CAmount(MAX_MONEY +1));
+    aTransaction = gtestUtils::createSidechainTxWith(uint256S("1492"), CAmount(MAX_MONEY +1));
 
     //test
     bool res = sidechainManager.checkTxSemanticValidity(aTransaction, txState);
@@ -150,7 +139,7 @@ TEST_F(SidechainTestSuite, SidechainCreationsWithTooLargePositiveForwardTransfer
 }
 
 TEST_F(SidechainTestSuite, SidechainCreationsWithZeroForwardTransferAreNotSemanticallyValid) {
-    aTransaction = createSidechainTxWith(uint256S("1492"), CAmount(0));
+    aTransaction = gtestUtils::createSidechainTxWith(uint256S("1492"), CAmount(0));
 
     //test
     bool res = sidechainManager.checkTxSemanticValidity(aTransaction, txState);
@@ -163,7 +152,7 @@ TEST_F(SidechainTestSuite, SidechainCreationsWithZeroForwardTransferAreNotSemant
 }
 
 TEST_F(SidechainTestSuite, SidechainCreationsWithNegativeForwardTransferNotAreSemanticallyValid) {
-    aTransaction = createSidechainTxWith(uint256S("1492"), CAmount(-1));
+    aTransaction = gtestUtils::createSidechainTxWith(uint256S("1492"), CAmount(-1));
 
     //test
     bool res = sidechainManager.checkTxSemanticValidity(aTransaction, txState);
@@ -178,8 +167,8 @@ TEST_F(SidechainTestSuite, SidechainCreationsWithNegativeForwardTransferNotAreSe
 TEST_F(SidechainTestSuite, FwdTransferCumulatedAmountDoesNotOverFlow) {
     uint256 scId = uint256S("1492");
     CAmount initialFwdTrasfer(1);
-    aTransaction = createSidechainTxWith(scId, initialFwdTrasfer);
-    extendTransaction(aTransaction, scId, MAX_MONEY);
+    aTransaction = gtestUtils::createSidechainTxWith(scId, initialFwdTrasfer);
+    gtestUtils::extendTransaction(aTransaction, scId, MAX_MONEY);
 
     //test
     bool res = sidechainManager.checkTxSemanticValidity(aTransaction, txState);
@@ -196,7 +185,7 @@ TEST_F(SidechainTestSuite, FwdTransferCumulatedAmountDoesNotOverFlow) {
 ///////////////////////////////////////////////////////////////////////////////
 
 TEST_F(SidechainTestSuite, NewScCreationsAreApplicableToState) {
-    aTransaction = createSidechainTxWith(uint256S("1492"), CAmount(1953));
+    aTransaction = gtestUtils::createSidechainTxWith(uint256S("1492"), CAmount(1953));
 
     //test
     bool res = sidechainManager.IsTxApplicableToState(aTransaction, &coinViewCache);
@@ -207,10 +196,10 @@ TEST_F(SidechainTestSuite, NewScCreationsAreApplicableToState) {
 
 TEST_F(SidechainTestSuite, DuplicatedScCreationsAreNotApplicableToState) {
     uint256 scId = uint256S("1492");
-    aTransaction = createSidechainTxWith(scId, CAmount(1953));
+    aTransaction = gtestUtils::createSidechainTxWith(scId, CAmount(1953));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, anHeight);
 
-    CTransaction duplicatedTx = createSidechainTxWith(scId, CAmount(1815));
+    CTransaction duplicatedTx = gtestUtils::createSidechainTxWith(scId, CAmount(1815));
 
     //test
     bool res = sidechainManager.IsTxApplicableToState(duplicatedTx, &coinViewCache);
@@ -221,10 +210,10 @@ TEST_F(SidechainTestSuite, DuplicatedScCreationsAreNotApplicableToState) {
 
 TEST_F(SidechainTestSuite, ForwardTransfersToExistingSCsAreApplicableToState) {
     uint256 scId = uint256S("1492");
-    aTransaction = createSidechainTxWith(scId, CAmount(1953));
+    aTransaction = gtestUtils::createSidechainTxWith(scId, CAmount(1953));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, anHeight);
 
-    aTransaction = createFwdTransferTxWith(scId, CAmount(5));
+    aTransaction = gtestUtils::createFwdTransferTxWith(scId, CAmount(5));
 
     //test
     bool res = sidechainManager.IsTxApplicableToState(aTransaction, &coinViewCache);
@@ -234,7 +223,7 @@ TEST_F(SidechainTestSuite, ForwardTransfersToExistingSCsAreApplicableToState) {
 }
 
 TEST_F(SidechainTestSuite, ForwardTransfersToNonExistingSCsAreNotApplicableToState) {
-    aTransaction = createFwdTransferTxWith(uint256S("1492"), CAmount(1815));
+    aTransaction = gtestUtils::createFwdTransferTxWith(uint256S("1492"), CAmount(1815));
 
     //test
     bool res = sidechainManager.IsTxApplicableToState(aTransaction, &coinViewCache);
@@ -248,7 +237,7 @@ TEST_F(SidechainTestSuite, ForwardTransfersToNonExistingSCsAreNotApplicableToSta
 ///////////////////////////////////////////////////////////////////////////////
 
 TEST_F(SidechainTestSuite, ScCreationTxsAreAllowedInEmptyMemPool) {
-    aTransaction = createSidechainTxWith(uint256S("1492"), CAmount(1953));
+    aTransaction = gtestUtils::createSidechainTxWith(uint256S("1492"), CAmount(1953));
 
     //test
     bool res = sidechainManager.IsTxAllowedInMempool(aMemPool, aTransaction, txState);
@@ -259,11 +248,11 @@ TEST_F(SidechainTestSuite, ScCreationTxsAreAllowedInEmptyMemPool) {
 }
 
 TEST_F(SidechainTestSuite, NewScCreationTxsAreAllowedInMemPool) {
-    aTransaction = createSidechainTxWith(uint256S("1987"), CAmount(1994));
+    aTransaction = gtestUtils::createSidechainTxWith(uint256S("1987"), CAmount(1994));
     CTxMemPoolEntry memPoolEntry(aTransaction, CAmount(), GetTime(), double(0.0), anHeight);
     aMemPool.addUnchecked(aTransaction.GetHash(), memPoolEntry);
 
-    CTransaction aNewTx = createSidechainTxWith(uint256S("1991"), CAmount(5));
+    CTransaction aNewTx = gtestUtils::createSidechainTxWith(uint256S("1991"), CAmount(5));
 
     //test
     bool res = sidechainManager.IsTxAllowedInMempool(aMemPool, aNewTx, txState);
@@ -276,11 +265,11 @@ TEST_F(SidechainTestSuite, NewScCreationTxsAreAllowedInMemPool) {
 TEST_F(SidechainTestSuite, DuplicatedScCreationTxsAreNotAllowedInMemPool) {
     uint256 scId = uint256S("1987");
 
-    aTransaction = createSidechainTxWith(scId, CAmount(10));
+    aTransaction = gtestUtils::createSidechainTxWith(scId, CAmount(10));
     CTxMemPoolEntry memPoolEntry(aTransaction, CAmount(), GetTime(), double(0.0), anHeight);
     aMemPool.addUnchecked(aTransaction.GetHash(), memPoolEntry);
 
-    CTransaction duplicatedTx = createSidechainTxWith(scId, CAmount(15));
+    CTransaction duplicatedTx = gtestUtils::createSidechainTxWith(scId, CAmount(15));
 
     //test
     bool res = sidechainManager.IsTxAllowedInMempool(aMemPool, aTransaction, txState);
@@ -299,7 +288,7 @@ TEST_F(SidechainTestSuite, InitialCoinsTransferDoesNotModifyScBalanceBeforeCoins
     uint256 scId = uint256S("a1b2");
     CAmount initialAmount = 1000;
     int scCreationHeight = 5;
-    aTransaction = createSidechainTxWith(scId, initialAmount);
+    aTransaction = gtestUtils::createSidechainTxWith(scId, initialAmount);
     coinViewCache.UpdateScInfo(aTransaction, aBlock, scCreationHeight);
 
     int coinMaturityHeight = scCreationHeight + Params().ScCoinsMaturity();
@@ -321,7 +310,7 @@ TEST_F(SidechainTestSuite, InitialCoinsTransferModifiesScBalanceAtCoinMaturity) 
     uint256 scId = uint256S("a1b2");
     CAmount initialAmount = 1000;
     int scCreationHeight = 7;
-    aTransaction = createSidechainTxWith(scId, initialAmount);
+    aTransaction = gtestUtils::createSidechainTxWith(scId, initialAmount);
     coinViewCache.UpdateScInfo(aTransaction, aBlock, scCreationHeight);
 
     int coinMaturityHeight = scCreationHeight + Params().ScCoinsMaturity();
@@ -343,7 +332,7 @@ TEST_F(SidechainTestSuite, InitialCoinsTransferDoesNotModifyScBalanceAfterCoinsM
     uint256 scId = uint256S("a1b2");
     CAmount initialAmount = 1000;
     int scCreationHeight = 11;
-    aTransaction = createSidechainTxWith(scId, initialAmount);
+    aTransaction = gtestUtils::createSidechainTxWith(scId, initialAmount);
     coinViewCache.UpdateScInfo(aTransaction, aBlock, scCreationHeight);
 
     int coinMaturityHeight = anHeight + Params().ScCoinsMaturity();
@@ -367,7 +356,7 @@ TEST_F(SidechainTestSuite, InitialCoinsTransferDoesNotModifyScBalanceAfterCoinsM
 TEST_F(SidechainTestSuite, RestoreImmatureBalancesAffectsScBalance) {
     uint256 scId = uint256S("ca1985");
     int scCreationHeight = 71;
-    aTransaction = createSidechainTxWith(scId, CAmount(34));
+    aTransaction = gtestUtils::createSidechainTxWith(scId, CAmount(34));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, scCreationHeight);
 
     coinViewCache.ApplyMatureBalances(scCreationHeight + Params().ScCoinsMaturity(), aBlockUndo);
@@ -389,7 +378,7 @@ TEST_F(SidechainTestSuite, RestoreImmatureBalancesAffectsScBalance) {
 TEST_F(SidechainTestSuite, YouCannotRestoreMoreCoinsThanAvailableBalance) {
     uint256 scId = uint256S("ca1985");
     int scCreationHeight = 1991;
-    aTransaction = createSidechainTxWith(scId, CAmount(34));
+    aTransaction = gtestUtils::createSidechainTxWith(scId, CAmount(34));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, scCreationHeight);
 
     coinViewCache.ApplyMatureBalances(scCreationHeight + Params().ScCoinsMaturity(), aBlockUndo);
@@ -410,7 +399,7 @@ TEST_F(SidechainTestSuite, YouCannotRestoreMoreCoinsThanAvailableBalance) {
 TEST_F(SidechainTestSuite, RestoringBeforeBalanceMaturesHasNoEffects) {
     uint256 scId = uint256S("ca1985");
     int scCreationHeight = 71;
-    aTransaction = createSidechainTxWith(scId, CAmount(34));
+    aTransaction = gtestUtils::createSidechainTxWith(scId, CAmount(34));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, scCreationHeight);
 
     coinViewCache.ApplyMatureBalances(scCreationHeight + Params().ScCoinsMaturity() -1, aBlockUndo);
@@ -448,7 +437,7 @@ TEST_F(SidechainTestSuite, YouCannotRestoreCoinsFromInexistentSc) {
 TEST_F(SidechainTestSuite, RevertingScCreationTxRemovesTheSc) {
     uint256 scId = uint256S("a1b2");
     int scCreationHeight = 1;
-    aTransaction = createSidechainTxWith(scId, CAmount(10));
+    aTransaction = gtestUtils::createSidechainTxWith(scId, CAmount(10));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, scCreationHeight);
 
     //test
@@ -462,11 +451,11 @@ TEST_F(SidechainTestSuite, RevertingScCreationTxRemovesTheSc) {
 TEST_F(SidechainTestSuite, RevertingFwdTransferRemovesCoinsFromImmatureBalance) {
     uint256 scId = uint256S("a1b2");
     int scCreationHeight = 1;
-    aTransaction = createSidechainTxWith(scId, CAmount(10));
+    aTransaction = gtestUtils::createSidechainTxWith(scId, CAmount(10));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, scCreationHeight);
 
     int fwdTxHeight = 5;
-    aTransaction = createFwdTransferTxWith(scId, CAmount(7));
+    aTransaction = gtestUtils::createFwdTransferTxWith(scId, CAmount(7));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, fwdTxHeight);
 
     //test
@@ -480,7 +469,7 @@ TEST_F(SidechainTestSuite, RevertingFwdTransferRemovesCoinsFromImmatureBalance) 
 }
 
 TEST_F(SidechainTestSuite, ScCreationTxCannotBeRevertedIfScIsNotPreviouslyCreated) {
-    aTransaction = createSidechainTxWith(uint256S("a1b2"),CAmount(15));
+    aTransaction = gtestUtils::createSidechainTxWith(uint256S("a1b2"),CAmount(15));
 
     //test
     bool res = coinViewCache.RevertTxOutputs(aTransaction, anHeight);
@@ -490,7 +479,7 @@ TEST_F(SidechainTestSuite, ScCreationTxCannotBeRevertedIfScIsNotPreviouslyCreate
 }
 
 TEST_F(SidechainTestSuite, FwdTransferTxToUnexistingScCannotBeReverted) {
-    aTransaction = createFwdTransferTxWith(uint256S("a1b2"), CAmount(999));
+    aTransaction = gtestUtils::createFwdTransferTxWith(uint256S("a1b2"), CAmount(999));
 
     //test
     bool res = coinViewCache.RevertTxOutputs(aTransaction, anHeight);
@@ -502,12 +491,12 @@ TEST_F(SidechainTestSuite, FwdTransferTxToUnexistingScCannotBeReverted) {
 TEST_F(SidechainTestSuite, RevertingAFwdTransferOnTheWrongHeightHasNoEffect) {
     uint256 scId = uint256S("a1b2");
     int scCreationHeight = 1;
-    aTransaction = createSidechainTxWith(scId, CAmount(10));
+    aTransaction = gtestUtils::createSidechainTxWith(scId, CAmount(10));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, scCreationHeight);
 
     int fwdTxHeight = 5;
     CAmount fwdAmount = 7;
-    aTransaction = createFwdTransferTxWith(scId, fwdAmount);
+    aTransaction = gtestUtils::createFwdTransferTxWith(scId, fwdAmount);
     coinViewCache.UpdateScInfo(aTransaction, aBlock, fwdTxHeight);
 
     //test
@@ -528,7 +517,7 @@ TEST_F(SidechainTestSuite, RevertingAFwdTransferOnTheWrongHeightHasNoEffect) {
 
 TEST_F(SidechainTestSuite, NewSCsAreRegistered) {
     uint256 newScId = uint256S("1492");
-    aTransaction = createSidechainTxWith(newScId, CAmount(1));
+    aTransaction = gtestUtils::createSidechainTxWith(newScId, CAmount(1));
 
     //test
     bool res = coinViewCache.UpdateScInfo(aTransaction, aBlock, anHeight);
@@ -540,10 +529,10 @@ TEST_F(SidechainTestSuite, NewSCsAreRegistered) {
 
 TEST_F(SidechainTestSuite, DuplicatedSCsAreRejected) {
     uint256 scId = uint256S("1492");
-    aTransaction = createSidechainTxWith(scId, CAmount(1));
+    aTransaction = gtestUtils::createSidechainTxWith(scId, CAmount(1));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, anHeight);
 
-    CTransaction duplicatedTx = createSidechainTxWith(scId, CAmount(999));
+    CTransaction duplicatedTx = gtestUtils::createSidechainTxWith(scId, CAmount(999));
 
     //test
     bool res = coinViewCache.UpdateScInfo(duplicatedTx, aBlock, anHeight);
@@ -555,9 +544,9 @@ TEST_F(SidechainTestSuite, DuplicatedSCsAreRejected) {
 TEST_F(SidechainTestSuite, NoRollbackIsPerformedOnceInvalidTransactionIsEncountered) {
     uint256 firstScId = uint256S("1492");
     uint256 secondScId = uint256S("1912");
-    aTransaction = createSidechainTxWith(firstScId, CAmount(10));
-    extendTransaction(aTransaction, firstScId, CAmount(20));
-    extendTransaction(aTransaction, secondScId, CAmount(30));
+    aTransaction = gtestUtils::createSidechainTxWith(firstScId, CAmount(10));
+    gtestUtils::extendTransaction(aTransaction, firstScId, CAmount(20));
+    gtestUtils::extendTransaction(aTransaction, secondScId, CAmount(30));
 
     //test
     bool res = coinViewCache.UpdateScInfo(aTransaction, aBlock, anHeight);
@@ -570,7 +559,7 @@ TEST_F(SidechainTestSuite, NoRollbackIsPerformedOnceInvalidTransactionIsEncounte
 
 TEST_F(SidechainTestSuite, ForwardTransfersToNonExistentSCsAreRejected) {
     uint256 nonExistentId = uint256S("1492");
-    aTransaction = createFwdTransferTxWith(nonExistentId, CAmount(10));
+    aTransaction = gtestUtils::createFwdTransferTxWith(nonExistentId, CAmount(10));
 
     //test
     bool res = coinViewCache.UpdateScInfo(aTransaction, aBlock, anHeight);
@@ -582,10 +571,10 @@ TEST_F(SidechainTestSuite, ForwardTransfersToNonExistentSCsAreRejected) {
 
 TEST_F(SidechainTestSuite, ForwardTransfersToExistentSCsAreRegistered) {
     uint256 newScId = uint256S("1492");
-    aTransaction = createSidechainTxWith(newScId, CAmount(5));
+    aTransaction = gtestUtils::createSidechainTxWith(newScId, CAmount(5));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, anHeight);
 
-    aTransaction = createFwdTransferTxWith(newScId, CAmount(15));
+    aTransaction = gtestUtils::createFwdTransferTxWith(newScId, CAmount(15));
 
     //test
     bool res = coinViewCache.UpdateScInfo(aTransaction, aBlock, anHeight);
@@ -598,7 +587,7 @@ TEST_F(SidechainTestSuite, ForwardTransfersToExistentSCsAreRegistered) {
 /////////////////////////////////// Flush /////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 TEST_F(SidechainTestSuite, FlushAlignsPersistedTxsWithViewOnes) {
-    aTransaction = createSidechainTxWith(uint256S("a1b2"), CAmount(1));
+    aTransaction = gtestUtils::createSidechainTxWith(uint256S("a1b2"), CAmount(1));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, anHeight);
 
     //prerequisites
@@ -624,7 +613,7 @@ TEST_F(SidechainTestSuite, UponViewCreationAllPersistedTxsAreLoaded) {
 
 TEST_F(SidechainTestSuite, FlushPersistsNewSidechains) {
     uint256 scId = uint256S("a1b2");
-    aTransaction = createSidechainTxWith(scId, CAmount(1000));
+    aTransaction = gtestUtils::createSidechainTxWith(scId, CAmount(1000));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, anHeight);
 
     //test
@@ -638,14 +627,14 @@ TEST_F(SidechainTestSuite, FlushPersistsNewSidechains) {
 TEST_F(SidechainTestSuite, FlushPersistsForwardTransfers) {
     uint256 scId = uint256S("a1b2");
     int scCreationHeight = 1;
-    aTransaction = createSidechainTxWith(scId, CAmount(1));
+    aTransaction = gtestUtils::createSidechainTxWith(scId, CAmount(1));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, scCreationHeight);
     coinViewCache.Flush();
 
     CAmount fwdTxAmount = 1000;
     int fwdTxHeght = scCreationHeight + 10;
     int fwdTxMaturityHeight = fwdTxHeght + Params().ScCoinsMaturity();
-    aTransaction = createFwdTransferTxWith(scId, CAmount(1000));
+    aTransaction = gtestUtils::createFwdTransferTxWith(scId, CAmount(1000));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, fwdTxHeght);
 
     //test
@@ -661,7 +650,7 @@ TEST_F(SidechainTestSuite, FlushPersistsForwardTransfers) {
 
 TEST_F(SidechainTestSuite, FlushPersistScErasureToo) {
     uint256 scId = uint256S("a1b2");
-    aTransaction = createSidechainTxWith(scId, CAmount(10));
+    aTransaction = gtestUtils::createSidechainTxWith(scId, CAmount(10));
     coinViewCache.UpdateScInfo(aTransaction, aBlock, anHeight);
     coinViewCache.Flush();
 
@@ -719,93 +708,6 @@ void SidechainTestSuite::preFillSidechainsCollection() {
     rManagerInternalMap[scId] = info;
 }
 
-CTransaction SidechainTestSuite::createSidechainTxWith(const uint256 & newScId, const CAmount & fwdTxAmount)
-{
-    CMutableTransaction mtx = populateTx(SC_TX_VERSION, newScId, fwdTxAmount);
-    mtx.vout.resize(0);
-    mtx.vjoinsplit.resize(0);
-    signTx(mtx);
-
-    //assert(CheckTransactionWithoutProofVerification(mtx, txState));
-    return CTransaction(mtx);
-}
-
-CTransaction SidechainTestSuite::createFwdTransferTxWith(const uint256 & newScId, const CAmount & fwdTxAmount)
-{
-    CMutableTransaction mtx = populateTx(SC_TX_VERSION, newScId, fwdTxAmount);
-    mtx.vout.resize(0);
-    mtx.vjoinsplit.resize(0);
-    mtx.vsc_ccout.resize(0);
-    signTx(mtx);
-
-    //assert(CheckTransactionWithoutProofVerification(mtx, txState));
-    return CTransaction(mtx);
-}
-
-CTransaction SidechainTestSuite::createSidechainTxWithNoFwdTransfer(const uint256 & newScId)
-{
-    CMutableTransaction mtx = populateTx(SC_TX_VERSION, newScId);
-    mtx.vout.resize(0);
-    mtx.vjoinsplit.resize(0);
-    mtx.vft_ccout.resize(0);
-    signTx(mtx);
-
-    //assert(CheckTransactionWithoutProofVerification(mtx, txState));
-    return CTransaction(mtx);
-}
-
-CTransaction SidechainTestSuite::createTransparentTx(bool ccIsNull) {
-    CMutableTransaction mtx = populateTx(TRANSPARENT_TX_VERSION);
-    mtx.vjoinsplit.resize(0);
-
-    if (ccIsNull)
-    {
-        mtx.vsc_ccout.resize(0);
-        mtx.vft_ccout.resize(0);
-    }
-    signTx(mtx);
-
-    //assert(CheckTransactionWithoutProofVerification(mtx, txState));
-    return CTransaction(mtx);
-}
-
-CTransaction SidechainTestSuite::createSproutTx(bool ccIsNull)
-{
-    CMutableTransaction mtx;
-
-    if (ccIsNull)
-    {
-        mtx = populateTx(PHGR_TX_VERSION);
-        mtx.vsc_ccout.resize(0);
-        mtx.vft_ccout.resize(0);
-    } else
-    {
-        mtx = populateTx(SC_TX_VERSION);
-    }
-    signTx(mtx);
-
-    //assert(CheckTransactionWithoutProofVerification(mtx, txState));
-    return CTransaction(mtx);
-}
-
-void  SidechainTestSuite::extendTransaction(CTransaction & tx, const uint256 & scId, const CAmount & amount) {
-    CMutableTransaction mtx = tx;
-
-    mtx.nVersion = SC_TX_VERSION;
-
-    CTxScCreationOut aSidechainCreationTx;
-    aSidechainCreationTx.scId = scId;
-    mtx.vsc_ccout.push_back(aSidechainCreationTx);
-
-    CTxForwardTransferOut aForwardTransferTx;
-    aForwardTransferTx.scId = aSidechainCreationTx.scId;
-    aForwardTransferTx.nValue = amount;
-    mtx.vft_ccout.push_back(aForwardTransferTx);
-
-    tx = mtx;
-    return;
-}
-
 CBlockUndo SidechainTestSuite::createBlockUndoWith(const uint256 & scId, int height, CAmount amount)
 {
     CBlockUndo retVal;
@@ -821,55 +723,3 @@ CBlockUndo SidechainTestSuite::createEmptyBlockUndo()
     return CBlockUndo();
 }
 
-CMutableTransaction SidechainTestSuite::populateTx(int txVersion, const uint256 & newScId, const CAmount & fwdTxAmount) {
-    CMutableTransaction mtx;
-    mtx.nVersion = txVersion;
-
-    mtx.vin.resize(2);
-    mtx.vin[0].prevout.hash = uint256S("1");
-    mtx.vin[0].prevout.n = 0;
-    mtx.vin[1].prevout.hash = uint256S("2");
-    mtx.vin[1].prevout.n = 0;
-
-    mtx.vout.resize(2);
-    mtx.vout[0].nValue = 0;
-    mtx.vout[1].nValue = 0;
-
-    mtx.vjoinsplit.push_back(
-            JSDescription::getNewInstance(txVersion == GROTH_TX_VERSION));
-    mtx.vjoinsplit.push_back(
-            JSDescription::getNewInstance(txVersion == GROTH_TX_VERSION));
-    mtx.vjoinsplit[0].nullifiers.at(0) = uint256S("0");
-    mtx.vjoinsplit[0].nullifiers.at(1) = uint256S("1");
-    mtx.vjoinsplit[1].nullifiers.at(0) = uint256S("2");
-    mtx.vjoinsplit[1].nullifiers.at(1) = uint256S("3");
-
-    mtx.vsc_ccout.resize(1);
-    mtx.vsc_ccout[0].scId = newScId;
-
-    mtx.vft_ccout.resize(1);
-    mtx.vft_ccout[0].scId = mtx.vsc_ccout[0].scId;
-    mtx.vft_ccout[0].nValue = fwdTxAmount;
-
-    return mtx;
-}
-
-void SidechainTestSuite::signTx(CMutableTransaction& mtx) {
-    // Generate an ephemeral keypair.
-    uint256 joinSplitPubKey;
-    unsigned char joinSplitPrivKey[crypto_sign_SECRETKEYBYTES];
-    crypto_sign_keypair(joinSplitPubKey.begin(), joinSplitPrivKey);
-    mtx.joinSplitPubKey = joinSplitPubKey;
-    // Compute the correct hSig.
-    // TODO: #966.
-    static const uint256 one(uint256S("1"));
-    // Empty output script.
-    CScript scriptCode;
-    CTransaction signTx(mtx);
-    uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL);
-    if (dataToBeSigned == one) {
-        throw std::runtime_error("SignatureHash failed");
-    }
-    // Add the signature
-    assert(crypto_sign_detached(&mtx.joinSplitSig[0], NULL, dataToBeSigned.begin(), 32, joinSplitPrivKey ) == 0);
-}

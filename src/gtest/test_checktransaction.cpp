@@ -460,109 +460,85 @@ TEST(checktransaction_tests, PhgrTxVersion) {
 /////////////////////////// SideChain-related tests ///////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-class CheckSidechainTxTestSuite: public ::testing::Test {
+#include "gtestUtils.h"
 
-public:
-    CheckSidechainTxTestSuite() {};
-
-    ~CheckSidechainTxTestSuite() {};
-
-    void SetUp() override {};
-
-    void TearDown() override {};
-};
-
-
-TEST_F(CheckSidechainTxTestSuite, SideChain_CMutableTransaction_CopyCtor_ScOutputsAreCopied) {
-    CMutableTransaction aMutableTx;
-    aMutableTx.nVersion = SC_TX_VERSION;
-
-    CTxScCreationOut aSideChainCreationTx;
-    aSideChainCreationTx.scId = uint256S("1987");
-    aMutableTx.vsc_ccout.push_back(aSideChainCreationTx);
+TEST(checkSctransaction_tests, SideChain_CMutableTransaction_CopyCtor) {
+    CMutableTransaction mutTx = gtestUtils::createSidechainTxWith(uint256S("aaaa"), CAmount(100));
 
     //prerequisites
-    ASSERT_TRUE(aMutableTx.IsScVersion())<<"Test requires at least a side chain tx";
-    ASSERT_TRUE(aMutableTx.vsc_ccout.size() != 0)<<"Test requires at least a ScCreationOut inserted";
+    ASSERT_TRUE(mutTx.IsScVersion())<<"Test requires at least a side chain tx";
+    ASSERT_TRUE(mutTx.vsc_ccout.size() != 0)<<"Test requires at least a ScCreationOut inserted";
+    ASSERT_TRUE(mutTx.vft_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
 
     //test
-    CMutableTransaction aCopyOfMutableTx(aMutableTx);
+    CMutableTransaction aCopyOfMutableTx(mutTx);
 
     //checks
     EXPECT_TRUE(aCopyOfMutableTx.IsScVersion());
-    EXPECT_TRUE(aCopyOfMutableTx.vsc_ccout == aMutableTx.vsc_ccout);
+    EXPECT_TRUE(aCopyOfMutableTx.vsc_ccout == mutTx.vsc_ccout);
+    EXPECT_TRUE(aCopyOfMutableTx.vft_ccout == mutTx.vft_ccout);
 }
 
-TEST_F(CheckSidechainTxTestSuite, SideChain_CMutableTransaction_CopyCtor_FwdTransferOutputsAreCopied) {
-    CMutableTransaction aMutableTx;
-    aMutableTx.nVersion = SC_TX_VERSION;
-
-    CTxForwardTransferOut aForwardTransferTx;
-    aForwardTransferTx.scId = uint256S("1987");
-    aForwardTransferTx.nValue = CAmount(1999);
-    aMutableTx.vft_ccout.push_back(aForwardTransferTx);
+TEST(checkSctransaction_tests, SideChain_CMutableTransaction_AssignementOp) {
+    CMutableTransaction mutTx = gtestUtils::createSidechainTxWith(uint256S("aaaa"), CAmount(100));
 
     //prerequisites
-    ASSERT_TRUE(aMutableTx.IsScVersion())<<"Test requires at least a side chain tx";
-    ASSERT_TRUE(aMutableTx.vft_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
+    ASSERT_TRUE(mutTx.IsScVersion())<<"Test requires at least a side chain tx";
+    ASSERT_TRUE(mutTx.vsc_ccout.size() != 0)<<"Test requires at least a ScCreationOut inserted";
+    ASSERT_TRUE(mutTx.vft_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
 
     //test
-    CMutableTransaction aCopyOfMutableTx(aMutableTx);
+    CMutableTransaction aCopyOfMutableTx;
+    aCopyOfMutableTx = mutTx;
 
     //checks
     EXPECT_TRUE(aCopyOfMutableTx.IsScVersion());
-    EXPECT_TRUE(aCopyOfMutableTx.vft_ccout == aMutableTx.vft_ccout);
+    EXPECT_TRUE(aCopyOfMutableTx.vsc_ccout == mutTx.vsc_ccout);
+    EXPECT_TRUE(aCopyOfMutableTx.vft_ccout == mutTx.vft_ccout);
 }
 
-TEST_F(CheckSidechainTxTestSuite, SideChain_CTransaction_AssignmentOp_ScOutputsAreCopied) {
-    CMutableTransaction aMutableTx;
-    aMutableTx.nVersion = SC_TX_VERSION;
-
-    CTxScCreationOut aSideChainCreationTx;
-    aSideChainCreationTx.scId = uint256S("1987");
-    aMutableTx.vsc_ccout.push_back(aSideChainCreationTx);
-
-    CTransaction aTx(aMutableTx);
-    CTransaction aCopyOfTx;
+TEST(checkSctransaction_tests, SideChain_CTransaction_CopyCtor) {
+    CMutableTransaction mutTx = gtestUtils::createSidechainTxWith(uint256S("aaaa"), CAmount(100));
 
     //prerequisites
-    ASSERT_TRUE(aTx.IsScVersion())<<"Test requires at least a side chain tx";
-    ASSERT_TRUE(aTx.vsc_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
+    ASSERT_TRUE(mutTx.IsScVersion())<<"Test requires at least a side chain tx";
+    ASSERT_TRUE(mutTx.vsc_ccout.size() != 0)<<"Test requires at least a ScCreationOut inserted";
+    ASSERT_TRUE(mutTx.vft_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
 
     //test
+    CTransaction aTx(mutTx);
+    CTransaction aCopyOfTx(aTx);
+
     aCopyOfTx = aTx;
 
     //checks
     EXPECT_TRUE(aCopyOfTx.IsScVersion());
+    EXPECT_TRUE(aCopyOfTx.vsc_ccout == aTx.vsc_ccout);
     EXPECT_TRUE(aCopyOfTx.vft_ccout == aTx.vft_ccout);
 }
 
-TEST_F(CheckSidechainTxTestSuite, SideChain_CTransaction_AssignmentOp_FwdTransferOutputsAreCopied) {
-    CMutableTransaction aMutableTx;
-    aMutableTx.nVersion = SC_TX_VERSION;
-
-    CTxForwardTransferOut aForwardTransferTx;
-    aForwardTransferTx.scId = uint256S("1987");
-    aForwardTransferTx.nValue = CAmount(1999);
-    aMutableTx.vft_ccout.push_back(aForwardTransferTx);
-
-    CTransaction aTx(aMutableTx);
-    CTransaction aCopyOfTx;
+TEST(checkSctransaction_tests, SideChain_CTransaction_AssignmentOp) {
+    CMutableTransaction mutTx = gtestUtils::createSidechainTxWith(uint256S("aaaa"), CAmount(100));
 
     //prerequisites
-    ASSERT_TRUE(aTx.IsScVersion())<<"Test requires at least a side chain tx";
-    ASSERT_TRUE(aTx.vft_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
+    ASSERT_TRUE(mutTx.IsScVersion())<<"Test requires at least a side chain tx";
+    ASSERT_TRUE(mutTx.vsc_ccout.size() != 0)<<"Test requires at least a ScCreationOut inserted";
+    ASSERT_TRUE(mutTx.vft_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
 
     //test
+    CTransaction aTx(mutTx);
+    CTransaction aCopyOfTx;
+
     aCopyOfTx = aTx;
 
     //checks
     EXPECT_TRUE(aCopyOfTx.IsScVersion());
+    EXPECT_TRUE(aCopyOfTx.vsc_ccout == aTx.vsc_ccout);
     EXPECT_TRUE(aCopyOfTx.vft_ccout == aTx.vft_ccout);
 }
 
 /////////////////////////// CTxForwardTransferOut
-TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_DefaultCtorCreatesNullOutput) {
+TEST(checkSctransaction_tests, CTxForwardTransferOut_DefaultCtorCreatesNullOutput) {
     //test
     CTxForwardTransferOut aNullFwrTransferOutput;
 
@@ -570,7 +546,7 @@ TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_DefaultCtorCreatesNullOu
     EXPECT_TRUE(aNullFwrTransferOutput.IsNull());
 }
 
-TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_AmountSetToMinus1MakesOutputNull) {
+TEST(checkSctransaction_tests, CTxForwardTransferOut_AmountSetToMinus1MakesOutputNull) {
     CTxForwardTransferOut aNullFwrTransferOutput(CAmount(-1), uint256S("1989"), uint256S("2008"));
 
     //prerequisites
@@ -586,7 +562,7 @@ TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_AmountSetToMinus1MakesOu
     EXPECT_TRUE(res);
 }
 
-TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_NoNegativeAmountMakeOutputNotNull) {
+TEST(checkSctransaction_tests, CTxForwardTransferOut_NoNegativeAmountMakeOutputNotNull) {
     CTxForwardTransferOut aNullFwrTransferOutput(CAmount(0), uint256S(""), uint256S(""));
 
     //prerequisites
@@ -601,7 +577,7 @@ TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_NoNegativeAmountMakeOutp
     EXPECT_FALSE(res);
 }
 
-TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_NegativeAmountMakeOutputNotNull) {
+TEST(checkSctransaction_tests, CTxForwardTransferOut_NegativeAmountMakeOutputNotNull) {
     CTxForwardTransferOut aNullFwrTransferOutput(CAmount(-2), uint256S(""), uint256S(""));
 
     //prerequisites
@@ -616,7 +592,7 @@ TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_NegativeAmountMakeOutput
     EXPECT_FALSE(res);
 }
 
-TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_CmpOp_ValueAddressAndScIdAreEvaluatedForEqualityAndInequality) {
+TEST(checkSctransaction_tests, CTxForwardTransferOut_CmpOp_ValueAddressAndScIdAreEvaluatedForEqualityAndInequality) {
     CTxForwardTransferOut lhsOut(CAmount(10), uint256S("1912"), uint256S("1789"));
     CTxForwardTransferOut rhsOut(CAmount(10), uint256S("1912"), uint256S("1789"));
 
@@ -642,7 +618,7 @@ TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_CmpOp_ValueAddressAndScI
     EXPECT_TRUE(res_OddScId)    <<"Outputs different ScId    do compare equal";
 }
 
-TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_NonZeroFeeRate_DustThresholdIsThreeTimesFeeForMinimalTxSize) {
+TEST(checkSctransaction_tests, CTxForwardTransferOut_NonZeroFeeRate_DustThresholdIsThreeTimesFeeForMinimalTxSize) {
     CTxForwardTransferOut anOutput;
     CFeeRate theMinimalFeeRate(CAmount(1000));
 
@@ -663,7 +639,7 @@ TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_NonZeroFeeRate_DustThres
         <<", while return value is "<<dustThreshold;
 }
 
-TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_ZeroFeeRate_DustThresholdIsThreeTimesFeeForMinimalTxSize) {
+TEST(checkSctransaction_tests, CTxForwardTransferOut_ZeroFeeRate_DustThresholdIsThreeTimesFeeForMinimalTxSize) {
     CTxForwardTransferOut anOutput;
     CFeeRate theMinimalFeeRate;
 
@@ -684,7 +660,7 @@ TEST_F(CheckSidechainTxTestSuite, CTxForwardTransferOut_ZeroFeeRate_DustThreshol
         <<", while return value is "<<dustThreshold;
 }
 
-//TEST_F(CheckSidechainTxTestSuite, IsDustCompareAmountWithDustThreshold) {
+//TEST(checkSctransaction_tests, IsDustCompareAmountWithDustThreshold) {
 //    CFeeRate targetFeeRate(14);
 //    CTxForwardTransferOut anOutputAboveDust(CAmount(7), uint256S(""), uint256S(""));
 //    CTxForwardTransferOut anOutputAtDust(CAmount(6), uint256S(""), uint256S(""));
