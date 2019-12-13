@@ -22,12 +22,14 @@ public:
     const uint256 nonce;
 
     /** Construct a CScCertificate that qualifies as IsNull() */
+    ~CScCertificate() {};
     CScCertificate();
 
     /** Convert a CMutableScCertificate into a CScCertificate.  */
     CScCertificate(const CMutableScCertificate &tx);
 
     CScCertificate& operator=(const CScCertificate& tx);
+    CScCertificate(const CScCertificate& tx);
 
     ADD_SERIALIZE_METHODS;
 
@@ -64,8 +66,8 @@ public:
     CAmount GetValueIn(const CCoinsViewCache& view) const { return 0; } 
     CAmount GetFeeAmount(CAmount valueIn) const;
 
-    bool IsCoinBase() const { return false; }
-    bool IsCoinCertificate() const { return true; }
+    bool IsCoinBase() const override { return false; }
+    bool IsCoinCertified() const override { return true; }
 
     friend bool operator==(const CScCertificate& a, const CScCertificate& b)
     {

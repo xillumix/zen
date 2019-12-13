@@ -2664,6 +2664,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         nSigOps += GetLegacySigOpCount(tx);
 #else
     std::vector<const CTransactionBase*> vTxBase;
+    /*
     vTxBase.reserve(block.vtx.size() + block.vcert.size()); 
 
     for (unsigned int i = 0; i < block.vtx.size(); i++)
@@ -2674,6 +2675,8 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     {
         vTxBase.push_back(&(block.vcert[i]));
     }
+    */
+    block.GetTxAndCertsVector(vTxBase);
 
     for (unsigned int i = 0; i < vTxBase.size(); i++)
     {
@@ -3134,6 +3137,7 @@ bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *
     list<CTransaction> txConflicted;
     mempool.removeForBlock(pblock->vtx, pindexNew->nHeight, txConflicted, !IsInitialBlockDownload());
     // TODO remove also certificates from mempool
+    mempool.removeForBlock(pblock->vcert, pindexNew->nHeight, !IsInitialBlockDownload());
     mempool.check(pcoinsTip);
     // Update chainActive & related variables.
     UpdateTip(pindexNew);

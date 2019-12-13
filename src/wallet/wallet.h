@@ -302,7 +302,7 @@ public:
     virtual uint256 GetObjHash() const = 0;
     virtual int SetMerkleBranch(const CBlock& block) = 0;
     virtual int GetBlocksToMaturity() const = 0;
-    virtual bool AcceptToMemoryPool(bool fLimitFree=true, bool fRejectAbsurdFee=true) = 0;
+    virtual bool AcceptToMemoryPool(bool fLimitFree=true, bool fRejectAbsurdFee=true);
 
     int GetDepthInMainChain(const CBlockIndex* &pindexRet) const;
     int GetDepthInMainChain() const { const CBlockIndex *pindexRet; return GetDepthInMainChain(pindexRet); }
@@ -347,7 +347,6 @@ public:
         return *this;
     }
 
-
     CMerkleTx()
     {
         Init();
@@ -378,9 +377,9 @@ public:
         READWRITE(nIndex);
     }
 
-    int SetMerkleBranch(const CBlock& block);
+    int SetMerkleBranch(const CBlock& block) override;
 
-    uint256 GetObjHash() const { return GetHash(); }
+    uint256 GetObjHash() const override { return GetHash(); }
 
     /**
      * Return depth of transaction in blockchain:
@@ -393,8 +392,8 @@ public:
     int GetDepthInMainChain() const { const CBlockIndex *pindexRet; return GetDepthInMainChain(pindexRet); }
     bool IsInMainChain() const { const CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
 #endif
-    int GetBlocksToMaturity() const;
-    bool AcceptToMemoryPool(bool fLimitFree=true, bool fRejectAbsurdFee=true);
+    int GetBlocksToMaturity() const override;
+//    bool AcceptToMemoryPool(bool fLimitFree=true, bool fRejectAbsurdFee=true);
 };
 
 /** A certificate with a merkle branch linking it to the block chain. */
@@ -404,6 +403,14 @@ private:
     int GetDepthInMainChainINTERNAL(const CBlockIndex* &pindexRet) const override;
 
 public:
+    CMerkleCert(const CMerkleCert&) = default;
+    CMerkleCert& operator=(const CMerkleCert& cert)
+    {
+        CScCertificate::operator=(cert);
+        MerkleAbstractBase::operator=(cert);
+        return *this;
+    }
+
     CMerkleCert()
     {
         Init();
@@ -440,8 +447,8 @@ public:
     int GetDepthInMainChain() const { const CBlockIndex *pindexRet; return GetDepthInMainChain(pindexRet); }
     bool IsInMainChain() const { const CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
 #endif
-    int GetBlocksToMaturity() const;
-    bool AcceptToMemoryPool(bool fLimitFree=true, bool fRejectAbsurdFee=true);
+    int GetBlocksToMaturity() const override;
+//    bool AcceptToMemoryPool(bool fLimitFree=true, bool fRejectAbsurdFee=true);
 };
 
 class CWalletObjBase : virtual public MerkleAbstractBase
@@ -450,6 +457,25 @@ protected:
     const CWallet* pwallet;
 
 public:
+    // memory only
+    mutable bool fDebitCached;
+    mutable bool fCreditCached;
+    mutable bool fImmatureCreditCached;
+    mutable bool fAvailableCreditCached;
+    mutable bool fWatchDebitCached;
+    mutable bool fWatchCreditCached;
+    mutable bool fImmatureWatchCreditCached;
+    mutable bool fAvailableWatchCreditCached;
+    mutable bool fChangeCached;
+    mutable CAmount nDebitCached;
+    mutable CAmount nCreditCached;
+    mutable CAmount nImmatureCreditCached;
+    mutable CAmount nAvailableCreditCached;
+    mutable CAmount nWatchDebitCached;
+    mutable CAmount nWatchCreditCached;
+    mutable CAmount nImmatureWatchCreditCached;
+    mutable CAmount nAvailableWatchCreditCached;
+    mutable CAmount nChangeCached;
 /*
     ~CWalletObjBase() {}
     CWalletObjBase() {}
@@ -492,24 +518,36 @@ public:
         return (GetDebit(filter) > 0);
     }
 
+    void GetAccountAmounts(const std::string& strAccount, CAmount& nReceived,
+                           CAmount& nSent, CAmount& nFee, const isminefilter& filter) const;
+
+    CAmount GetAvailableCredit(bool fUseCache=true) const;
+
     // virtuals
-    virtual void MarkDirty() = 0;
-    void SetNoteData(mapNoteData_t &noteData) {}; // default is null
+    virtual void MarkDirty()
+    {
+        fCreditCached = false;
+        fAvailableCreditCached = false;
+        fWatchDebitCached = false;
+        fWatchCreditCached = false;
+        fAvailableWatchCreditCached = false;
+        fImmatureWatchCreditCached = false;
+        fDebitCached = false;
+        fChangeCached = false;
+    }
+
+    virtual void SetNoteData(mapNoteData_t &noteData) {}; // default is null
 
     //! filter decides which addresses will count towards the debit
-    virtual CAmount GetDebit(const isminefilter& filter) const = 0;
-    virtual CAmount GetCredit(const isminefilter& filter) const = 0;
+    virtual CAmount GetDebit(const isminefilter& filter) const { return 0; } // certs has no vin
+    virtual CAmount GetCredit(const isminefilter& filter) const; // base default is ok for certs
     virtual CAmount GetImmatureCredit(bool fUseCache=true) const = 0;
-    virtual CAmount GetAvailableCredit(bool fUseCache=true) const = 0;
     virtual CAmount GetImmatureWatchOnlyCredit(const bool& fUseCache=true) const = 0;
     virtual CAmount GetAvailableWatchOnlyCredit(const bool& fUseCache=true) const = 0;
     virtual CAmount GetChange() const = 0;
 
     virtual void GetAmounts(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, std::list<CScOutputEntry>& listScSent,
         CAmount& nFee, std::string& strSentAccount, const isminefilter& filter) const = 0;
-
-    virtual void GetAccountAmounts(const std::string& strAccount, CAmount& nReceived,
-                           CAmount& nSent, CAmount& nFee, const isminefilter& filter) const = 0;
 
     virtual bool IsTrusted() const = 0;
 
@@ -526,94 +564,19 @@ public:
         std::vector<CNotePlaintextEntry> & outEntries,
         bool fFilterAddress,
         libzcash::PaymentAddress filterPaymentAddress,
-        bool ignoreSpent, bool ignoreUnspendable) {} // default empty (certs have no notes)
-    virtual void AddToSpends(CWallet* pw) {};
+        bool ignoreSpent = true, bool ignoreUnspendable = true) {} // default empty (certs have no notes)
+    virtual void AddToSpends(CWallet* pw) {}; // certs do not spend anything
     virtual void ClearNoteWitnessCache() {};
     // return false if the map is empty
-    virtual bool GetMapNoteData(mapNoteData_t& m) const { return false; }
+    virtual const mapNoteData_t* GetMapNoteData() const { return NULL; }
     virtual void SetMapNoteData(mapNoteData_t& m) {}
     virtual void HandleInputGrouping(std::set< std::set<CTxDestination> >& groupings, std::set<CTxDestination>& grouping) {};
-
-};
-
-/** 
- * A transaction with a bunch of additional info that only the owner cares about.
- * It includes any unrecorded transactions needed to link it back to the block chain.
- */
-class CWalletTx : public CMerkleTx, virtual public CWalletObjBase
-{
-#if 0
-private:
-    const CWallet* pwallet;
-
-public:
-    mapValue_t mapValue;
-#else
-public:
-#endif
-    mapNoteData_t mapNoteData;
-#if 0
-    std::vector<std::pair<std::string, std::string> > vOrderForm; // ???
-    unsigned int fTimeReceivedIsTxTime;
-    unsigned int nTimeReceived; //! time received by this node
-    unsigned int nTimeSmart;
-    char fFromMe;
-    std::string strFromAccount;
-    int64_t nOrderPos; //! position in ordered transaction list
-#endif
-
-    // memory only
-    mutable bool fDebitCached;
-    mutable bool fCreditCached;
-    mutable bool fImmatureCreditCached;
-    mutable bool fAvailableCreditCached;
-    mutable bool fWatchDebitCached;
-    mutable bool fWatchCreditCached;
-    mutable bool fImmatureWatchCreditCached;
-    mutable bool fAvailableWatchCreditCached;
-    mutable bool fChangeCached;
-    mutable CAmount nDebitCached;
-    mutable CAmount nCreditCached;
-    mutable CAmount nImmatureCreditCached;
-    mutable CAmount nAvailableCreditCached;
-    mutable CAmount nWatchDebitCached;
-    mutable CAmount nWatchCreditCached;
-    mutable CAmount nImmatureWatchCreditCached;
-    mutable CAmount nAvailableWatchCreditCached;
-    mutable CAmount nChangeCached;
-
-    CWalletTx& operator=(const CWalletTx& tx)
-    {
-        CMerkleTx::operator=(tx);
-        CWalletObjBase::operator=(tx);
-        return *this;
-    }
-
-    CWalletTx()
-    {
-        Init(NULL);
-    }
-
-    CWalletTx(const CWallet* pwalletIn)
-    {
-        Init(pwalletIn);
-    }
-
-    CWalletTx(const CWallet* pwalletIn, const CMerkleTx& txIn) : CMerkleTx(txIn)
-    {    
-        Init(pwalletIn);
-    }
-
-    CWalletTx(const CWallet* pwalletIn, const CTransaction& txIn) : CMerkleTx(txIn)
-    {
-        Init(pwalletIn);
-    }
 
     void Init(const CWallet* pwalletIn)
     {
         pwallet = pwalletIn;
         mapValue.clear();
-        mapNoteData.clear();
+        //mapNoteData.clear();
         vOrderForm.clear();
         fTimeReceivedIsTxTime = false;
         nTimeReceived = 0;
@@ -639,6 +602,53 @@ public:
         nImmatureWatchCreditCached = 0;
         nChangeCached = 0;
         nOrderPos = -1;
+    }
+
+    virtual std::shared_ptr<CWalletObjBase> MakeWalletMapObject() const = 0;
+
+};
+
+/** 
+ * A transaction with a bunch of additional info that only the owner cares about.
+ * It includes any unrecorded transactions needed to link it back to the block chain.
+ */
+class CWalletTx : public CMerkleTx, virtual public CWalletObjBase
+{
+public:
+    mapNoteData_t mapNoteData;
+
+    CWalletTx& operator=(const CWalletTx& tx)
+    {
+        CMerkleTx::operator=(tx);
+        CWalletObjBase::operator=(tx);
+
+        mapNoteData = tx.mapNoteData;
+
+        return *this;
+    }
+
+    CWalletTx()
+    {
+        Init(NULL);
+        mapNoteData.clear();
+    }
+
+    CWalletTx(const CWallet* pwalletIn)
+    {
+        Init(pwalletIn);
+        mapNoteData.clear();
+    }
+
+    CWalletTx(const CWallet* pwalletIn, const CMerkleTx& txIn) : CMerkleTx(txIn)
+    {    
+        Init(pwalletIn);
+        mapNoteData.clear();
+    }
+
+    CWalletTx(const CWallet* pwalletIn, const CTransaction& txIn) : CMerkleTx(txIn)
+    {
+        Init(pwalletIn);
+        mapNoteData.clear();
     }
 
     ADD_SERIALIZE_METHODS;
@@ -686,70 +696,38 @@ public:
         mapValue.erase("timesmart");
     }
 
-    //! make sure balances are recalculated
-    void MarkDirty()
-    {
-        fCreditCached = false;
-        fAvailableCreditCached = false;
-        fWatchDebitCached = false;
-        fWatchCreditCached = false;
-        fAvailableWatchCreditCached = false;
-        fImmatureWatchCreditCached = false;
-        fDebitCached = false;
-        fChangeCached = false;
-    }
-
-#if 0
-    void BindWallet(CWallet *pwalletIn)
-    {
-        pwallet = pwalletIn;
-        MarkDirty();
-    }
-#endif
-
     void SetNoteData(mapNoteData_t &noteData);
 
     //! filter decides which addresses will count towards the debit
-    CAmount GetDebit(const isminefilter& filter) const;
-    CAmount GetCredit(const isminefilter& filter) const;
-    CAmount GetImmatureCredit(bool fUseCache=true) const;
-    CAmount GetAvailableCredit(bool fUseCache=true) const;
-    CAmount GetImmatureWatchOnlyCredit(const bool& fUseCache=true) const;
-    CAmount GetAvailableWatchOnlyCredit(const bool& fUseCache=true) const;
-    CAmount GetChange() const;
+    CAmount GetDebit(const isminefilter& filter) const override;
+    CAmount GetCredit(const isminefilter& filter) const override;
+    CAmount GetImmatureCredit(bool fUseCache=true) const override;
+    CAmount GetImmatureWatchOnlyCredit(const bool& fUseCache=true) const override;
+    CAmount GetAvailableWatchOnlyCredit(const bool& fUseCache=true) const override;
+    CAmount GetChange() const override;
 
     void GetAmounts(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, std::list<CScOutputEntry>& listScSent,
-        CAmount& nFee, std::string& strSentAccount, const isminefilter& filter) const;
+        CAmount& nFee, std::string& strSentAccount, const isminefilter& filter) const override;
 
-    void GetAccountAmounts(const std::string& strAccount, CAmount& nReceived,
-                           CAmount& nSent, CAmount& nFee, const isminefilter& filter) const;
+    bool IsTrusted() const override;
+    bool WriteToDisk(CWalletDB *pwalletdb) override;
 
-#if 0
-    bool IsFromMe(const isminefilter& filter) const
-    {
-        return (GetDebit(filter) > 0);
-    }
-#endif
+    int64_t GetTxTime() const override;
+    int GetRequestCount() const override;
 
-    bool IsTrusted() const;
-
-    bool WriteToDisk(CWalletDB *pwalletdb);
-
-    int64_t GetTxTime() const;
-    int GetRequestCount() const;
-
-    bool RelayWalletTransaction();
+    bool RelayWalletTransaction() override;
 
     std::set<uint256> GetConflicts() const override;
     void GetConflicts(std::set<uint256>& result) const override;
+
     void GetNotesAmount(
         std::vector<CNotePlaintextEntry> & outEntries,
         bool fFilterAddress,
         libzcash::PaymentAddress filterPaymentAddress,
-        bool ignoreSpent, bool ignoreUnspendable); 
+        bool ignoreSpent = true, bool ignoreUnspendable = true); 
     void AddToSpends(CWallet* pw);
     void ClearNoteWitnessCache();
-    bool GetMapNoteData(mapNoteData_t& m) const;
+    const mapNoteData_t* GetMapNoteData() const;
     void SetMapNoteData(mapNoteData_t& m);
     void HandleInputGrouping(std::set< std::set<CTxDestination> >& groupings, std::set<CTxDestination>& grouping);
 
@@ -763,18 +741,104 @@ public:
             listScSent.push_back(output);
         }
     }
-
+    std::shared_ptr<CWalletObjBase> MakeWalletMapObject() const override;
 };
 
-// TODO 
-/*
 class CWalletCert : public CMerkleCert, virtual public CWalletObjBase
 {
-private:
-    const CWallet* pwallet;
-    public:
+public:
+
+    CWalletCert& operator=(const CWalletCert& cert)
+    {
+        CMerkleCert::operator=(cert);
+        CWalletObjBase::operator=(cert);
+
+        // add members handling
+        return *this;
+    }
+
+    CWalletCert()
+    {
+        Init(NULL);
+    }
+
+    CWalletCert(const CWallet* pwalletIn)
+    {
+        Init(pwalletIn);
+    }
+
+    CWalletCert(const CWallet* pwalletIn, const CMerkleCert& certIn) : CMerkleCert(certIn)
+    {    
+        Init(pwalletIn);
+    }
+
+    CWalletCert(const CWallet* pwalletIn, const CScCertificate& certIn) : CMerkleCert(certIn)
+    {
+        Init(pwalletIn);
+    }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
+        if (ser_action.ForRead())
+            Init(NULL);
+        char fSpent = false;
+
+        if (!ser_action.ForRead())
+        {
+            mapValue["fromaccount"] = strFromAccount;
+
+            WriteOrderPos(nOrderPos, mapValue);
+
+            if (nTimeSmart)
+                mapValue["timesmart"] = strprintf("%u", nTimeSmart);
+        }
+
+        READWRITE(*(CMerkleCert*)this);
+        std::vector<CMerkleCert> vUnused; //! Used to be vtxPrev
+        READWRITE(vUnused);
+        READWRITE(mapValue);
+        READWRITE(vOrderForm);
+        READWRITE(fTimeReceivedIsTxTime);
+        READWRITE(nTimeReceived);
+        READWRITE(fFromMe);
+        READWRITE(fSpent);
+
+        if (ser_action.ForRead())
+        {
+            strFromAccount = mapValue["fromaccount"];
+
+            ReadOrderPos(nOrderPos, mapValue);
+
+            nTimeSmart = mapValue.count("timesmart") ? (unsigned int)atoi64(mapValue["timesmart"]) : 0;
+        }
+
+        mapValue.erase("fromaccount");
+        mapValue.erase("version");
+        mapValue.erase("spent");
+        mapValue.erase("n");
+        mapValue.erase("timesmart");
+    }
+
+    CAmount GetImmatureCredit(bool fUseCache=true) const override;
+    CAmount GetImmatureWatchOnlyCredit(const bool& fUseCache=true) const override;
+    CAmount GetAvailableWatchOnlyCredit(const bool& fUseCache=true) const override;
+    CAmount GetChange() const override;
+
+    void GetAmounts(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, std::list<CScOutputEntry>& listScSent,
+        CAmount& nFee, std::string& strSentAccount, const isminefilter& filter) const override;
+
+    bool IsTrusted() const override;
+    bool WriteToDisk(CWalletDB *pwalletdb) override;
+
+    int64_t GetTxTime() const override;
+    int GetRequestCount() const override;
+
+    bool RelayWalletTransaction() override;
+
+    std::shared_ptr<CWalletObjBase> MakeWalletMapObject() const override;
 };
-*/
 
 
 
@@ -1144,6 +1208,7 @@ public:
     std::map<uint256, JSOutPoint> mapNullifiersToNotes;
 
     std::map<uint256, std::shared_ptr<CWalletObjBase> > mapWallet;
+    typedef std::map<uint256, std::shared_ptr<CWalletObjBase> >::const_iterator MAP_WALLET_CONST_IT;
 //    std::map<uint256, CWalletCert> mapWalletCert;
 
     int64_t nOrderPosNext;
@@ -1271,10 +1336,11 @@ public:
     bool UpdateNullifierNoteMap();
 #if 0
     void UpdateNullifierNoteMapWithTx(const CWalletTx& wtx);
+    bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb);
 #else
     void UpdateNullifierNoteMapWithTx(const CWalletObjBase& wtx);
+    bool AddToWallet(const CWalletObjBase& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb);
 #endif
-    bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb);
     void SyncTransaction(const CTransaction& tx, const CBlock* pblock);
     void SyncCertificate(const CScCertificate& cert, const CBlock* pblock);
     bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate);
@@ -1348,7 +1414,11 @@ public:
     /** should probably be renamed to IsRelevantToMe */
     bool IsFromMe(const CTransaction& tx) const;
     CAmount GetDebit(const CTransaction& tx, const isminefilter& filter) const;
+#if 0
     CAmount GetCredit(const CTransaction& tx, const isminefilter& filter) const;
+#else
+    CAmount GetCredit(const CTransactionBase& tx, const isminefilter& filter) const;
+#endif
     CAmount GetChange(const CTransaction& tx) const;
     void ChainTip(const CBlockIndex *pindex, const CBlock *pblock, ZCIncrementalMerkleTree tree, bool added);
     /** Saves witness caches and best block locator to disk. */

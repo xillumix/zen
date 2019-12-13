@@ -145,6 +145,13 @@ TEST(wallet_tests, note_data_serialisation) {
 
 TEST(wallet_tests, find_unspent_notes) {
     SelectParams(CBaseChainParams::TESTNET);
+
+    // print logs to console
+    fDebug = true;
+    fPrintToConsole = true;
+    mapArgs["-debug"] = "forks";
+    mapMultiArgs["-debug"].push_back("forks");
+
     CWallet wallet;
     auto sk = libzcash::SpendingKey::random();
     wallet.AddSpendingKey(sk);
@@ -242,6 +249,7 @@ TEST(wallet_tests, find_unspent_notes) {
 
 
     // Let's receive a new note
+#if 1
     CWalletTx wtx3;
     {
         auto wtx = GetValidReceive(sk, 20, true);
@@ -259,6 +267,20 @@ TEST(wallet_tests, find_unspent_notes) {
 
         wtx3 = wtx;
     }
+#else
+    auto wtx3 = GetValidReceive(sk, 20, true);
+    auto note1 = GetNote(sk, wtx3, 0, 1);
+    auto nullifier1 = note1.nullifier(sk);
+
+    mapNoteData_t noteData1;
+    JSOutPoint jsoutpt1 {wtx3.GetHash(), 0, 1};
+    CNoteData nd1 {sk.address(), nullifier1};
+    noteData1[jsoutpt1] = nd1;
+
+    wtx3.SetNoteData(noteData1);
+    wallet.AddToWallet(wtx3, true, NULL);
+    EXPECT_FALSE(wallet.IsSpent(nullifier1));
+#endif
 
     // Fake-mine the new transaction
     EXPECT_EQ(1, chainActive.Height());
@@ -876,10 +898,8 @@ TEST(wallet_tests, ClearNoteWitnessCache) {
 #if 0
     EXPECT_EQ(1, wallet.mapWallet[hash].mapNoteData[jsoutpt].witnessHeight);
 #else
-    mapNoteData_t m;
-    bool ret = wallet.mapWallet[hash]->GetMapNoteData(m);
-    assert(ret);
-    EXPECT_EQ(1, m[jsoutpt].witnessHeight);
+    mapNoteData_t* m = const_cast<mapNoteData_t*>(wallet.mapWallet[hash]->GetMapNoteData());
+    EXPECT_EQ(1, ((*m)[jsoutpt]).witnessHeight);
 #endif
     EXPECT_EQ(1, wallet.nWitnessCacheSize);
 
@@ -892,10 +912,8 @@ TEST(wallet_tests, ClearNoteWitnessCache) {
 #if 0
     EXPECT_EQ(-1, wallet.mapWallet[hash].mapNoteData[jsoutpt].witnessHeight);
 #else
-    mapNoteData_t m2;
-    ret = wallet.mapWallet[hash]->GetMapNoteData(m2);
-    assert(ret);
-    EXPECT_EQ(-1, m2[jsoutpt].witnessHeight);
+    mapNoteData_t* m2 = const_cast<mapNoteData_t*>(wallet.mapWallet[hash]->GetMapNoteData());
+    EXPECT_EQ(-1, (*m2)[jsoutpt].witnessHeight);
 #endif
     EXPECT_EQ(0, wallet.nWitnessCacheSize);
 }

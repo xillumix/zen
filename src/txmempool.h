@@ -156,11 +156,17 @@ public:
     bool addUnchecked(const uint256& hash, const CCertificateMemPoolEntry &entry, bool fCurrentEstimate = true);
 
     void remove(const CTransaction &tx, std::list<CTransaction>& removed, bool fRecursive = false);
+#if 1
+    void remove(const CScCertificate &cert, std::list<CScCertificate>& removed, bool fRecursive = false);
+#endif
     void removeWithAnchor(const uint256 &invalidRoot);
     void removeCoinbaseSpends(const CCoinsViewCache *pcoins, unsigned int nMemPoolHeight);
     void removeConflicts(const CTransaction &tx, std::list<CTransaction>& removed);
     void removeForBlock(const std::vector<CTransaction>& vtx, unsigned int nBlockHeight,
                         std::list<CTransaction>& conflicts, bool fCurrentEstimate = true);
+    // no conflicts for certs
+    void removeForBlock(const std::vector<CScCertificate>& vcert, unsigned int nBlockHeight, bool fCurrentEstimate = true);
+
     void clear();
     void queryHashes(std::vector<uint256>& vtxid);
     void pruneSpent(const uint256& hash, CCoins &coins);

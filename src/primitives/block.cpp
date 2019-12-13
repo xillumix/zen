@@ -151,6 +151,7 @@ uint256 CBlock::BuildScMerkleRootsMap()
     return BuildMerkleRootHash(vSortedLeaves);
 }
 
+#define DEBUG_MERKLE_BRANCH 1
 
 std::vector<uint256> CBlock::GetMerkleBranch(int nIndex) const
 {
@@ -180,9 +181,9 @@ uint256 CBlock::CheckMerkleBranch(uint256 hash, const std::vector<uint256>& vMer
     {
 #ifdef DEBUG_MERKLE_BRANCH
         std::cout << " -------------------------------------------" << std::endl;
-        std::cout << "  idx:  " << index << std::endl;
-        std::cout << "    hash1:  " << (*it).ToString() << std::endl;
-        std::cout << "    hash1:  " << hash.ToString() << std::endl;
+        std::cout << "  idx: " << nIndex << std::endl;
+        std::cout << "     (b)hash:  " << (*it).ToString() << std::endl;
+        std::cout << "        hash:  " << hash.ToString() << std::endl;
 #endif
         if (nIndex & 1)
             hash = Hash(BEGIN(*it), END(*it), BEGIN(hash), END(hash));
@@ -190,7 +191,7 @@ uint256 CBlock::CheckMerkleBranch(uint256 hash, const std::vector<uint256>& vMer
             hash = Hash(BEGIN(hash), END(hash), BEGIN(*it), END(*it));
         nIndex >>= 1;
 #ifdef DEBUG_MERKLE_BRANCH
-        std::cout << "  leaf hash: " << hash.ToString() << std::endl;
+        std::cout << "  ret hash: " << hash.ToString() << std::endl;
 #endif
 
     }

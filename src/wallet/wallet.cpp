@@ -92,7 +92,7 @@ const CWalletObjBase* CWallet::GetWalletTx(const uint256& hash) const
         return NULL;
     return &(it->second);
 #else
-    const auto it = mapWallet.find(hash);
+    const MAP_WALLET_CONST_IT it = mapWallet.find(hash);
     if (it == mapWallet.end())
         return NULL;
     return it->second.get();
@@ -491,7 +491,7 @@ set<uint256> CWallet::GetConflicts(const uint256& txid) const
         return result;
     const CWalletTx& wtx = it->second;
 #else
-    const auto it = mapWallet.find(txid);
+    const MAP_WALLET_CONST_IT it = mapWallet.find(txid);
     if (it == mapWallet.end())
         return result;
     const CWalletObjBase& wtx = *(it->second);
@@ -651,11 +651,22 @@ bool CWallet::IsSpent(const uint256& hash, unsigned int n) const
 #if 0
         std::map<uint256, CWalletTx>::const_iterator mit = mapWallet.find(wtxid);
         if (mit != mapWallet.end() && mit->second.GetDepthInMainChain() >= 0)
-#else
-        auto mit = mapWallet.find(wtxid);
-        if (mit != mapWallet.end() && mit->second->GetDepthInMainChain() >= 0)
-#endif
             return true; // Spent
+#else
+        const auto mit = mapWallet.find(wtxid);
+        if (mit != mapWallet.end() )
+        {
+            if (mit->second->GetDepthInMainChain() >= 0)
+            {
+                return true; // Spent
+            }
+            else
+            {
+                LogPrint("cert", "%s():%d - obj[%s] has depth %d\n", __func__, __LINE__,
+                    wtxid.ToString(), mit->second->GetDepthInMainChain());
+            }
+        }
+#endif
     }
     return false;
 }
@@ -721,12 +732,11 @@ void CWallet::AddToSpends(const uint256& wtxid)
 #else
     CWalletObjBase& thisTx = *(mapWallet[wtxid]);
     thisTx.AddToSpends(this);
-#endif
 }
 
 void CWalletTx::AddToSpends(CWallet* pw)
 {
-    // TODO use pwallet instead, but cast its constness away
+    // TODO cert: use pwallet instead, but cast its constness away
     if (!pw)
     {
         LogPrintf("%s():%d - null wallet ptr\n", __func__, __LINE__);
@@ -737,6 +747,8 @@ void CWalletTx::AddToSpends(CWallet* pw)
         return;
 
     for (const CTxIn& txin : vin) {
+        LogPrint("cert", "%s():%d - obj[%s] spends out %d of [%s]\n", __func__, __LINE__,
+            GetHash().ToString(), txin.prevout.n, txin.prevout.hash.ToString());
         pw->AddToSpends(txin.prevout, GetHash());
     }
     for (const JSDescription& jsdesc : vjoinsplit) {
@@ -744,6 +756,7 @@ void CWalletTx::AddToSpends(CWallet* pw)
             pw->AddToSpends(nullifier, GetHash());
         }
     }
+#endif
 }
 
 
@@ -777,15 +790,9 @@ void CWalletTx::SetMapNoteData(mapNoteData_t& m)
     mapNoteData = m;
 }
 
-bool CWalletTx::GetMapNoteData(mapNoteData_t& m) const
+const mapNoteData_t* CWalletTx::GetMapNoteData() const
 {
-    m.clear();
-    if (mapNoteData.empty() )
-    {
-        return false;
-    }
-    m = mapNoteData;
-    return true;
+    return &mapNoteData;
 }
 
 void CWallet::IncrementNoteWitnesses(const CBlockIndex* pindex,
@@ -798,7 +805,7 @@ void CWallet::IncrementNoteWitnesses(const CBlockIndex* pindex,
         for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
             for (mapNoteData_t::value_type& item : wtxItem.second.mapNoteData) {
 #else
-        // TODO add a virtual method to base class which calls this
+        // TODO cert: add a virtual method to base class which calls this
         for (auto& obj : mapWallet) {
             CWalletTx* p = dynamic_cast<CWalletTx*>(obj.second.get());
             if (!p)
@@ -857,7 +864,7 @@ void CWallet::IncrementNoteWitnesses(const CBlockIndex* pindex,
                     for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
                         for (mapNoteData_t::value_type& item : wtxItem.second.mapNoteData) {
 #else
-                    // TODO add a virtual method to base class which calls this
+                    // TODO cert: add a virtual method to base class which calls this
                     for (auto& obj : mapWallet) {
                         CWalletTx* p = dynamic_cast<CWalletTx*>(obj.second.get());
                         if (!p)
@@ -926,7 +933,7 @@ void CWallet::IncrementNoteWitnesses(const CBlockIndex* pindex,
         for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
             for (mapNoteData_t::value_type& item : wtxItem.second.mapNoteData) {
 #else
-        // TODO add a virtual method to base class which calls this, or add a virtual method GetMapNoteData()
+        // TODO cert: add a virtual method to base class which calls this, or add a virtual method GetMapNoteData()
         for (auto& obj : mapWallet) {
             CWalletTx* p = dynamic_cast<CWalletTx*>(obj.second.get());
             if (!p)
@@ -961,7 +968,7 @@ void CWallet::DecrementNoteWitnesses(const CBlockIndex* pindex)
         for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
             for (mapNoteData_t::value_type& item : wtxItem.second.mapNoteData) {
 #else
-        // TODO add a virtual method to base class which calls this, or add a virtual method GetMapNoteData()
+        // TODO cert: add a virtual method to base class which calls this, or add a virtual method GetMapNoteData()
         for (auto& obj : mapWallet) {
             CWalletTx* p = dynamic_cast<CWalletTx*>(obj.second.get());
             if (!p)
@@ -997,7 +1004,7 @@ void CWallet::DecrementNoteWitnesses(const CBlockIndex* pindex)
         for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
             for (mapNoteData_t::value_type& item : wtxItem.second.mapNoteData) {
 #else
-        // TODO add a virtual method to base class which calls this, or add a virtual method GetMapNoteData()
+        // TODO cert: add a virtual method to base class which calls this, or add a virtual method GetMapNoteData()
         for (auto& obj : mapWallet) {
             CWalletTx* p = dynamic_cast<CWalletTx*>(obj.second.get());
             if (!p)
@@ -1151,7 +1158,7 @@ CWallet::TxItems CWallet::OrderedTxItems(std::list<CAccountingEntry>& acentries,
     {
         CWalletTx* wtx = &((*it).second);
 #else
-    for (auto it = mapWallet.begin(); it != mapWallet.end(); ++it)
+    for (MAP_WALLET_CONST_IT it = mapWallet.begin(); it != mapWallet.end(); ++it)
     {
         CWalletObjBase* wtx = it->second.get();
 #endif
@@ -1198,7 +1205,7 @@ bool CWallet::UpdateNullifierNoteMap()
         for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
             for (mapNoteData_t::value_type& item : wtxItem.second.mapNoteData) {
 #else
-        // TODO add a virtual method to base class which calls this, or add a virtual method GetMapNoteData()
+        // TODO cert: add a virtual method to base class which calls this, or add a virtual method GetMapNoteData()
         for (auto& obj : mapWallet) {
             CWalletTx* p = dynamic_cast<CWalletTx*>(obj.second.get());
             if (!p)
@@ -1252,7 +1259,7 @@ void CWallet::UpdateNullifierNoteMapWithTx(const CWalletObjBase& obj)
     {
         LOCK(cs_wallet);
 #if 1
-        // TODO add a virtual method to base class which calls this, or add a virtual method GetMapNoteData()
+        // TODO cert: add a virtual method to base class which calls this, or add a virtual method GetMapNoteData()
         const CWalletTx* p = dynamic_cast<const CWalletTx*>(&obj);
         if (!p)
         {
@@ -1269,7 +1276,16 @@ void CWallet::UpdateNullifierNoteMapWithTx(const CWalletObjBase& obj)
     }
 }
 
+std::shared_ptr<CWalletObjBase> CWalletTx::MakeWalletMapObject() const
+{
+    return std::shared_ptr<CWalletObjBase>( new CWalletTx(*this));
+}
+
+#if 0
 bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb)
+#else
+bool CWallet::AddToWallet(const CWalletObjBase& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb)
+#endif
 {
     uint256 hash = wtxIn.GetHash();
 
@@ -1280,7 +1296,8 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
         mapWallet[hash].BindWallet(this);
         UpdateNullifierNoteMapWithTx(mapWallet[hash]);
 #else
-        mapWallet[hash] = std::shared_ptr<CWalletObjBase>( new CWalletTx(wtxIn));
+        mapWallet[hash] = wtxIn.MakeWalletMapObject();
+//        mapWallet[hash] = std::shared_ptr<CWalletObjBase>( new CWalletTx(wtxIn));
         mapWallet[hash]->BindWallet(this);
         UpdateNullifierNoteMapWithTx(*(mapWallet[hash]));
 #endif
@@ -1294,7 +1311,8 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
         pair<map<uint256, CWalletTx>::iterator, bool> ret = mapWallet.insert(make_pair(hash, wtxIn));
         CWalletTx& wtx = (*ret.first).second;
 #else
-        auto obj = std::shared_ptr<CWalletObjBase>( new CWalletTx(wtxIn));
+//        auto obj = std::shared_ptr<CWalletObjBase>( new CWalletTx(wtxIn));
+        auto obj = wtxIn.MakeWalletMapObject();
         auto ret = mapWallet.insert(make_pair(hash, obj) );
         CWalletObjBase& wtx = *((*ret.first).second);
 #endif
@@ -1422,20 +1440,25 @@ bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
 #else
 bool CWallet::UpdatedNoteData(const CWalletObjBase& wtxIn, CWalletObjBase& wtx)
 {
-    mapNoteData_t ml;
-    mapNoteData_t mr;
-    if (!wtxIn.GetMapNoteData(ml) || !wtx.GetMapNoteData(mr) )
+    const mapNoteData_t* ml = wtxIn.GetMapNoteData();
+    const mapNoteData_t* mr = wtx.GetMapNoteData();
+
+    if (!ml || !mr)
     {
+        // no notes exist to be update
         return false;
     }
 
-    if (ml == mr) {
+    if (ml->empty() || (*ml) == (*mr) )
+    {
+        // no notes to be updated on output wtx
         return false;
     }
 
-    auto tmp = ml;
+    auto tmp = *ml;
+
     // Ensure we keep any cached witnesses we may already have
-    for (const std::pair<JSOutPoint, CNoteData> nd : mr) {
+    for (const std::pair<JSOutPoint, CNoteData> nd : (*mr) ) {
 #endif
         if (tmp.count(nd.first) && nd.second.witnesses.size() > 0) {
             tmp.at(nd.first).witnesses.assign(
@@ -1507,8 +1530,8 @@ bool CWallet::AddToWalletIfInvolvingMe(const CScCertificate& cert, const CBlock*
         }
         if (fExisted || IsMine(cert) )
         {
-            // TODO
-#if 0
+            // TODO add certificates to the wallet
+#if 1
             CWalletCert wcert(this, cert);
 
             // Get merkle branch if transaction was found in a block
@@ -1693,12 +1716,12 @@ void CWallet::GetNoteWitnesses(std::vector<JSOutPoint> notes,
 #else
             if (mapWallet.count(note.hash) )
             { 
-                mapNoteData_t mnd;
-                if (mapWallet[note.hash]->GetMapNoteData(mnd) &&
-                    mnd.count(note) &&
-                    mnd[note].witnesses.size() > 0)
+                mapNoteData_t* mnd = const_cast<mapNoteData_t*>(mapWallet[note.hash]->GetMapNoteData());
+                if (mnd &&
+                    mnd->count(note) &&
+                    ((*mnd)[note]).witnesses.size() > 0)
                 {
-                    witnesses[i] = mnd[note].witnesses.front();
+                    witnesses[i] = ((*mnd)[note]).witnesses.front();
                     if (!rt) {
                         rt = witnesses[i]->root();
                     } else {
@@ -1837,7 +1860,11 @@ CAmount CWallet::GetDebit(const CTransaction& tx, const isminefilter& filter) co
     return nDebit;
 }
 
+#if 0
 CAmount CWallet::GetCredit(const CTransaction& tx, const isminefilter& filter) const
+#else
+CAmount CWallet::GetCredit(const CTransactionBase& tx, const isminefilter& filter) const
+#endif
 {
     CAmount nCredit = 0;
     BOOST_FOREACH(const CTxOut& txout, tx.vout)
@@ -2053,8 +2080,13 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
     }
 }
 
+#if 0
 void CWalletTx::GetAccountAmounts(const string& strAccount, CAmount& nReceived,
                                   CAmount& nSent, CAmount& nFee, const isminefilter& filter) const
+#else
+void CWalletObjBase::GetAccountAmounts(const string& strAccount, CAmount& nReceived,
+                                  CAmount& nSent, CAmount& nFee, const isminefilter& filter) const
+#endif
 {
     nReceived = nSent = nFee = 0;
 
@@ -2352,6 +2384,13 @@ CAmount CWalletTx::GetCredit(const isminefilter& filter) const
     // Must wait until coinbase is safely deep enough in the chain before valuing it
     if (IsCoinBase() && GetBlocksToMaturity() > 0)
         return 0;
+#if 1
+    return CWalletObjBase::GetCredit(filter);
+}
+
+CAmount CWalletObjBase::GetCredit(const isminefilter& filter) const
+{
+#endif
 
     int64_t credit = 0;
     if (filter & ISMINE_SPENDABLE)
@@ -2380,6 +2419,7 @@ CAmount CWalletTx::GetCredit(const isminefilter& filter) const
     return credit;
 }
 
+#if 0
 CAmount CWalletTx::GetImmatureCredit(bool fUseCache) const
 {
     if (IsCoinBase() && GetBlocksToMaturity() > 0 && IsInMainChain())
@@ -2393,8 +2433,31 @@ CAmount CWalletTx::GetImmatureCredit(bool fUseCache) const
 
     return 0;
 }
+#else
+CAmount CWalletTx::GetImmatureCredit(bool fUseCache) const
+{
+    if (IsCoinBase() && GetBlocksToMaturity() > 0 && IsInMainChain())
+    {
+        return CWalletObjBase::GetImmatureCredit(fUseCache);
+    }
+    return 0;
+}
 
+CAmount CWalletObjBase::GetImmatureCredit(bool fUseCache) const
+{
+    if (fUseCache && fImmatureCreditCached)
+        return nImmatureCreditCached;
+    nImmatureCreditCached = pwallet->GetCredit(*this, ISMINE_SPENDABLE);
+    fImmatureCreditCached = true;
+    return nImmatureCreditCached;
+}
+#endif
+
+#if 0
 CAmount CWalletTx::GetAvailableCredit(bool fUseCache) const
+#else
+CAmount CWalletObjBase::GetAvailableCredit(bool fUseCache) const
+#endif
 {
     if (pwallet == 0)
         return 0;
@@ -2479,7 +2542,11 @@ CAmount CWalletTx::GetChange() const
 bool CWalletTx::IsTrusted() const
 {
     // Quick answer in most cases
+#if 0
     if (!CheckFinalTx(*this))
+#else
+    if (!CheckFinal())
+#endif
         return false;
     int nDepth = GetDepthInMainChain();
     if (nDepth >= 1)
@@ -2588,7 +2655,7 @@ CAmount CWallet::GetBalance() const
         {
             const CWalletTx* pcoin = &(*it).second;
 #else
-        for (auto it = mapWallet.begin(); it != mapWallet.end(); ++it)
+        for (MAP_WALLET_CONST_IT it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const CWalletObjBase* pcoin = it->second.get();
 #endif
@@ -2611,7 +2678,7 @@ CAmount CWallet::GetUnconfirmedBalance() const
             const CWalletTx* pcoin = &(*it).second;
             if (!CheckFinalTx(*pcoin) || (!pcoin->IsTrusted() && pcoin->GetDepthInMainChain() == 0))
 #else
-        for (auto it = mapWallet.begin(); it != mapWallet.end(); ++it)
+        for (MAP_WALLET_CONST_IT it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const CWalletObjBase* pcoin = it->second.get();
             if (!pcoin->CheckFinal() || (!pcoin->IsTrusted() && pcoin->GetDepthInMainChain() == 0))
@@ -2632,7 +2699,7 @@ CAmount CWallet::GetImmatureBalance() const
         {
             const CWalletTx* pcoin = &(*it).second;
 #else
-        for (auto it = mapWallet.begin(); it != mapWallet.end(); ++it)
+        for (MAP_WALLET_CONST_IT it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const CWalletObjBase* pcoin = it->second.get();
 #endif
@@ -2652,7 +2719,7 @@ CAmount CWallet::GetWatchOnlyBalance() const
         {
             const CWalletTx* pcoin = &(*it).second;
 #else
-        for (auto it = mapWallet.begin(); it != mapWallet.end(); ++it)
+        for (MAP_WALLET_CONST_IT it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const CWalletObjBase* pcoin = it->second.get();
 #endif
@@ -2675,7 +2742,7 @@ CAmount CWallet::GetUnconfirmedWatchOnlyBalance() const
             const CWalletTx* pcoin = &(*it).second;
             if (!CheckFinalTx(*pcoin) || (!pcoin->IsTrusted() && pcoin->GetDepthInMainChain() == 0))
 #else
-        for (auto it = mapWallet.begin(); it != mapWallet.end(); ++it)
+        for (MAP_WALLET_CONST_IT it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const CWalletObjBase* pcoin = it->second.get();
             if (!pcoin->CheckFinal() || (!pcoin->IsTrusted() && pcoin->GetDepthInMainChain() == 0))
@@ -2696,7 +2763,7 @@ CAmount CWallet::GetImmatureWatchOnlyBalance() const
         {
             const CWalletTx* pcoin = &(*it).second;
 #else
-        for (auto it = mapWallet.begin(); it != mapWallet.end(); ++it)
+        for (MAP_WALLET_CONST_IT it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const CWalletObjBase* pcoin = it->second.get();
 #endif
@@ -2722,7 +2789,7 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
             const CWalletTx* pcoin = &(*it).second;
             if (!CheckFinalTx(*pcoin))
 #else
-        for (auto it = mapWallet.begin(); it != mapWallet.end(); ++it)
+        for (MAP_WALLET_CONST_IT it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const uint256& wtxid = it->first;
             const CWalletObjBase* pcoin = (*it).second.get();
@@ -2764,6 +2831,11 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
                             if(!fIncludeCoinBase)
                                 continue;
                         }
+                    }
+                    if (pcoin->IsCoinCertified() )
+                    {
+                        LogPrint("cert", "%s():%d - cert[%s] out[%d], spendable[%s]\n", __func__, __LINE__,
+                            pcoin->GetHash().ToString(), i, ((mine & ISMINE_SPENDABLE) != ISMINE_NO)?"Y":"N");
                     }
                     vCoins.push_back(COutput(pcoin, i, nDepth, (mine & ISMINE_SPENDABLE) != ISMINE_NO));
                 }
@@ -3022,7 +3094,7 @@ bool CWallet::SelectCoins(const CAmount& nTargetValue, set<pair<const CWalletObj
         {
             const CWalletTx* pcoin = &it->second;
 #else
-        auto it = mapWallet.find(outpoint.hash);
+        MAP_WALLET_CONST_IT it = mapWallet.find(outpoint.hash);
         if (it != mapWallet.end())
         {
             const CWalletObjBase* pcoin = it->second.get();
@@ -3476,7 +3548,6 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
             AddToWallet(wtxNew, false, pwalletdb);
 
             // Notify that old coins are spent
-            set<CWalletTx*> setCoins;
             BOOST_FOREACH(const CTxIn& txin, wtxNew.vin)
             {
 #if 0
@@ -4162,7 +4233,7 @@ void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const {
         // iterate over all wallet transactions...
         const CWalletTx &wtx = (*it).second;
 #else
-    for (auto it = mapWallet.begin(); it != mapWallet.end(); it++) {
+    for (MAP_WALLET_CONST_IT it = mapWallet.begin(); it != mapWallet.end(); it++) {
         // iterate over all wallet transactions...
         const CWalletObjBase &wtx = *((*it).second);
 #endif
@@ -4329,12 +4400,15 @@ int CMerkleTx::GetBlocksToMaturity() const
     return max(0, (COINBASE_MATURITY+1) - GetDepthInMainChain());
 }
 
-
+#if 0
 bool CMerkleTx::AcceptToMemoryPool(bool fLimitFree, bool fRejectAbsurdFee)
+#else
+bool MerkleAbstractBase::AcceptToMemoryPool(bool fLimitFree, bool fRejectAbsurdFee)
 {
     CValidationState state;
     return ::AcceptToMemoryPool(mempool, state, *this, fLimitFree, NULL, fRejectAbsurdFee);
 }
+#endif
 
 /**
  * Find notes in the wallet filtered by payment address, min depth and ability to spend.
@@ -4361,17 +4435,20 @@ void CWallet::GetFilteredNotes(std::vector<CNotePlaintextEntry> & outEntries, st
         // Filter the transactions before checking for notes
         if (!wtx.CheckFinal() || wtx.GetBlocksToMaturity() > 0 || wtx.GetDepthInMainChain() < minDepth) {
 #endif
+            //LogPrintf("%s():%d - skipping[%s]\n", __func__, __LINE__, wtx.GetHash().ToString());
             continue;
         }
 
 #if 0
         if (wtx.mapNoteData.size() == 0) {
 #else
-        mapNoteData_t mnd;
-        if (!wtx.GetMapNoteData(mnd) || mnd.size() == 0) {
+        const mapNoteData_t* mnd = wtx.GetMapNoteData();
+        if (!mnd || mnd->size() == 0) {
 #endif
+            //LogPrintf("%s():%d - skipping[%s]\n", __func__, __LINE__, wtx.GetHash().ToString());
             continue;
         }
+        LogPrintf("%s():%d - mnd.size=%d\n", __func__, __LINE__, mnd->size());
 
 #if 0
         for (auto & pair : wtx.mapNoteData) {
@@ -4442,6 +4519,7 @@ void CWalletTx::GetNotesAmount(
         return;
     }
 
+    LogPrintf("%s():%d - wtx[%s], mnd.size=%d\n", __func__, __LINE__, GetHash().ToString(), mapNoteData.size());
     for (auto & pair : mapNoteData) {
         JSOutPoint jsop = pair.first;
         CNoteData nd = pair.second;
@@ -4449,16 +4527,19 @@ void CWalletTx::GetNotesAmount(
 
         // skip notes which belong to a different payment address in the wallet
         if (fFilterAddress && !(pa == filterPaymentAddress)) {
+            LogPrintf("%s():%d - skipping[%s]\n", __func__, __LINE__, GetHash().ToString());
             continue;
         }
 
         // skip note which has been spent
         if (ignoreSpent && nd.nullifier && pwallet->IsSpent(*nd.nullifier)) {
+            LogPrintf("%s():%d - skipping[%s]\n", __func__, __LINE__, GetHash().ToString());
             continue;
         }
 
         // skip notes which cannot be spent
         if (ignoreUnspendable && !pwallet->HaveSpendingKey(pa)) {
+            LogPrintf("%s():%d - skipping[%s]\n", __func__, __LINE__, GetHash().ToString());
             continue;
         }
 
@@ -4483,6 +4564,7 @@ void CWalletTx::GetNotesAmount(
                     hSig,
                     (unsigned char) j);
  
+            LogPrintf("%s():%d - adding[%s] (%s)\n", __func__, __LINE__, GetHash().ToString(), jsop.hash.ToString());
             outEntries.push_back(CNotePlaintextEntry{jsop, plaintext});
  
         } catch (const note_decryption_failed &err) {
@@ -4528,7 +4610,7 @@ int CMerkleCert::SetMerkleBranch(const CBlock& block)
 {
     // TODO generalize and move in base class
     AssertLockHeld(cs_main);
-    CBlock blockTmp;
+    //CBlock blockTmp;
 
     // Update the tx's hashBlock
     hashBlock = block.GetHash();
@@ -4564,14 +4646,145 @@ int CMerkleCert::SetMerkleBranch(const CBlock& block)
 
 int CMerkleCert::GetBlocksToMaturity() const
 {
-    // TODO handle maturity apter merge with suited branch
+    // TODO handle certificates maturity after merge with suited branch
     static const int COIN_CERTIFICATE_MATURITY = 0;
-    assert(IsCoinCertificate());
+    assert(IsCoinCertified());
     return max(0, (COIN_CERTIFICATE_MATURITY+1) - GetDepthInMainChain());
 }
 
+/*
 bool CMerkleCert::AcceptToMemoryPool(bool fLimitFree, bool fRejectAbsurdFee)
 {
     // TODO
     return true;
 }
+*/
+
+CAmount CWalletCert::GetImmatureCredit(bool fUseCache) const
+{
+    if (IsInMainChain())
+    {
+        return CWalletObjBase::GetImmatureCredit(fUseCache);
+    }
+    return 0;
+}
+
+/*
+CAmount CWalletCert::GetAvailableCredit(bool fUseCache) const
+{
+    LogPrint("cert", "%s():%d - called for obj[%s] ===> TODO\n", __func__, __LINE__, GetHash().ToString());
+    // TODO
+    return 0;
+}
+*/
+
+CAmount CWalletCert::GetImmatureWatchOnlyCredit(const bool& fUseCache) const
+{
+    // TODO
+    LogPrint("cert", "%s():%d - called for obj[%s] ===> TODO\n", __func__, __LINE__, GetHash().ToString());
+    return 0;
+}
+
+CAmount CWalletCert::GetAvailableWatchOnlyCredit(const bool& fUseCache) const
+{
+    // TODO
+    LogPrint("cert", "%s():%d - called for obj[%s] ===> TODO\n", __func__, __LINE__, GetHash().ToString());
+    return 0;
+}
+
+CAmount CWalletCert::GetChange() const
+{
+    // TODO
+    LogPrint("cert", "%s():%d - called for obj[%s] ===> TODO\n", __func__, __LINE__, GetHash().ToString());
+    return 0;
+}
+
+void CWalletCert::GetAmounts(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, std::list<CScOutputEntry>& listScSent,
+    CAmount& nFee, std::string& strSentAccount, const isminefilter& filter) const
+{
+    LogPrint("cert", "%s():%d - called for obj[%s]\n", __func__, __LINE__, GetHash().ToString());
+
+    nFee = 0;
+    listReceived.clear();
+    listSent.clear();
+    listScSent.clear();
+    strSentAccount = strFromAccount;
+
+    bool isFromMyTaddr = false;
+    bool isFromMyZaddr = false;
+
+    // Sent/received.
+    for (unsigned int i = 0; i < vout.size(); ++i)
+    {
+        const CTxOut& txout = vout[i];
+        isminetype fIsMine = pwallet->IsMine(txout);
+        // Only need to handle txouts if  the output is to us (received)
+        if (!(fIsMine & filter))
+            continue;
+
+        // we need to get the destination address
+        CTxDestination address;
+        if (!ExtractDestination(txout.scriptPubKey, address))
+        {
+            LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s\n",
+                     this->GetHash().ToString());
+            address = CNoDestination();
+        }
+
+        COutputEntry output = {address, txout.nValue, (int)i};
+
+        // If we are receiving the output, add it as a "received" entry
+        if (fIsMine & filter)
+            listReceived.push_back(output);
+    }
+}
+
+/*
+void CWalletCert::GetAccountAmounts(const std::string& strAccount, CAmount& nReceived,
+    CAmount& nSent, CAmount& nFee, const isminefilter& filter) const 
+{
+    // TODO
+    LogPrint("cert", "%s():%d - called for obj[%s] ===> TODO\n", __func__, __LINE__, GetHash().ToString());
+}
+*/
+
+bool CWalletCert::IsTrusted() const 
+{
+    // certificateds are trusted
+    LogPrint("cert", "%s():%d - called for obj[%s] returning true\n", __func__, __LINE__, GetHash().ToString());
+    return true;
+}
+
+bool CWalletCert::WriteToDisk(CWalletDB *pwalletdb) 
+{
+    // TODO
+    LogPrint("cert", "%s():%d - called for obj[%s] ===> TODO\n", __func__, __LINE__, GetHash().ToString());
+    return true;
+}
+
+int64_t CWalletCert::GetTxTime() const 
+{
+    // TODO
+    LogPrint("cert", "%s():%d - called for obj[%s] ===> TODO\n", __func__, __LINE__, GetHash().ToString());
+    return 0;
+}
+
+int CWalletCert::GetRequestCount() const 
+{
+    // TODO
+    LogPrint("cert", "%s():%d - called for obj[%s] ===> TODO\n", __func__, __LINE__, GetHash().ToString());
+    return 0;
+}
+
+bool CWalletCert::RelayWalletTransaction() 
+{
+    // TODO
+    LogPrint("cert", "%s():%d - called for obj[%s] ===> TODO\n", __func__, __LINE__, GetHash().ToString());
+    return true;
+}
+
+std::shared_ptr<CWalletObjBase> CWalletCert::MakeWalletMapObject() const
+{
+    return std::shared_ptr<CWalletObjBase>( new CWalletCert(*this));
+}
+

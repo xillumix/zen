@@ -2833,9 +2833,24 @@ UniValue listunspent(const UniValue& params, bool fHelp)
         CAmount nValue = out.tx->vout[out.i].nValue;
         const CScript& pk = out.tx->vout[out.i].scriptPubKey;
         UniValue entry(UniValue::VOBJ);
+#if 1
+        if (out.tx->IsCoinCertified() )
+        {
+            entry.push_back(Pair("cert", out.tx->GetHash().GetHex()));
+            entry.push_back(Pair("vout", out.i));
+            entry.push_back(Pair("certified", true));
+        }
+        else
+        {
+            entry.push_back(Pair("txid", out.tx->GetHash().GetHex()));
+            entry.push_back(Pair("vout", out.i));
+            entry.push_back(Pair("generated", out.tx->IsCoinBase()));
+        }
+#else
         entry.push_back(Pair("txid", out.tx->GetHash().GetHex()));
         entry.push_back(Pair("vout", out.i));
         entry.push_back(Pair("generated", out.tx->IsCoinBase()));
+#endif
         CTxDestination address;
         if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, address)) {
             entry.push_back(Pair("address", CBitcoinAddress(address).ToString()));

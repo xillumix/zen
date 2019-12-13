@@ -15,7 +15,7 @@ class WalletNullifiersTest (BitcoinTestFramework):
 
     def setup_nodes(self):
         return start_nodes(4, self.options.tmpdir,
-                           extra_args=[['-experimentalfeatures', '-developerencryptwallet']] * 4)
+                           extra_args=[['-experimentalfeatures', '-debug=1', '-developerencryptwallet']] * 4)
 
     def run_test (self):
         # add zaddr to node 0
@@ -192,6 +192,9 @@ class WalletNullifiersTest (BitcoinTestFramework):
         assert_equal(myzaddr in self.nodes[3].z_listaddresses(True), True)
 
         # Node 3 should see the same received notes as node 2
+        print self.nodes[2].z_listreceivedbyaddress(myzaddr)
+        print self.nodes[3].z_listreceivedbyaddress(myzaddr)
+#        raw_input("press enter to continue...")
         assert_equal(
             self.nodes[2].z_listreceivedbyaddress(myzaddr),
             self.nodes[3].z_listreceivedbyaddress(myzaddr))

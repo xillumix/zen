@@ -101,7 +101,11 @@ public:
     }
 
     //! construct a CCoins from a CTransaction, at a given height
+#if 0
     CCoins(const CTransaction &tx, int nHeightIn) {
+#else
+    CCoins(const CTransactionBase &tx, int nHeightIn) {
+#endif
         FromTx(tx, nHeightIn);
     }
 
@@ -155,11 +159,15 @@ public:
     void CalcMaskSize(unsigned int &nBytes, unsigned int &nNonzeroBytes) const;
 
     bool IsCoinBase() const {
+#if 0
         return fCoinBase;
+#else
+        return fCoinBase && !IsCoinCertified();
+#endif
     }
 
     bool IsCoinCertified() const {
-#if 0
+#if 1
         if (nVersion != 1 && nVersion != -4)
         {
             std::cout << "Version: " << std::hex << nVersion << std::endl;

@@ -127,7 +127,6 @@ bool operator<(const CInv& a, const CInv& b)
 
 bool CInv::IsKnownType() const
 {
-    int q = (int)(sizeof(ppszTypeName)/sizeof((ppszTypeName)[0]));
     return (type >= 1 && type < (int)ARRAYLEN(ppszTypeName));
 }
 

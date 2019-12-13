@@ -18,12 +18,24 @@ CScCertificate::CScCertificate(const CMutableScCertificate &cert) :
 
 CScCertificate& CScCertificate::operator=(const CScCertificate &cert) {
     CTransactionBase::operator=(cert);
+    //---
     *const_cast<uint256*>(&scId) = cert.scId;
     *const_cast<CAmount*>(&totalAmount) = cert.totalAmount;
     *const_cast<std::vector<CTxBackwardTransferCrosschainOut>*>(&vbt_ccout) = cert.vbt_ccout;
     *const_cast<uint256*>(&nonce) = cert.nonce;
-    *const_cast<uint256*>(&hash) = cert.hash;
     return *this;
+}
+
+CScCertificate::CScCertificate(const CScCertificate &cert) : totalAmount(0) {
+    // call explicitly the copy of members of virtual base class
+    *const_cast<uint256*>(&hash) = cert.hash;
+    *const_cast<int*>(&nVersion) = cert.nVersion;
+    *const_cast<std::vector<CTxOut>*>(&vout) = cert.vout;
+    //---
+    *const_cast<uint256*>(&scId) = cert.scId;
+    *const_cast<CAmount*>(&totalAmount) = cert.totalAmount;
+    *const_cast<std::vector<CTxBackwardTransferCrosschainOut>*>(&vbt_ccout) = cert.vbt_ccout;
+    *const_cast<uint256*>(&nonce) = cert.nonce;
 }
 
 void CScCertificate::UpdateHash() const
@@ -121,7 +133,8 @@ void CScCertificate::UpdateCoins(CValidationState &state, CCoinsViewCache& view,
 void CScCertificate::UpdateCoins(CValidationState &state, CCoinsViewCache& inputs, CBlockUndo& blockundo, int nHeight) const
 {
     // TODO handle blockundo
-    // add outputs
+
+    // TODO add outputs
     LogPrint("cert", "%s():%d - adding coins for cert [%s]\n", __func__, __LINE__, GetHash().ToString());
     inputs.ModifyCoins(GetHash())->FromTx(*this, nHeight);
 }
