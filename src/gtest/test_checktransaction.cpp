@@ -465,53 +465,30 @@ TEST(checktransaction_tests, PhgrTxVersion) {
 TEST(checkSctransaction_tests, SideChain_CMutableTransaction_CopyCtor) {
     CMutableTransaction mutTx = gtestUtils::createSidechainTxWith(uint256S("aaaa"), CAmount(100));
 
-    //prerequisites
-    ASSERT_TRUE(mutTx.IsScVersion())<<"Test requires at least a side chain tx";
-    ASSERT_TRUE(mutTx.vsc_ccout.size() != 0)<<"Test requires at least a ScCreationOut inserted";
-    ASSERT_TRUE(mutTx.vft_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
+    CMutableTransaction mutTxCpy(mutTx);
 
-    //test
-    CMutableTransaction aCopyOfMutableTx(mutTx);
-
-    //checks
-    EXPECT_TRUE(aCopyOfMutableTx.IsScVersion());
-    EXPECT_TRUE(aCopyOfMutableTx.vsc_ccout == mutTx.vsc_ccout);
-    EXPECT_TRUE(aCopyOfMutableTx.vft_ccout == mutTx.vft_ccout);
+    EXPECT_TRUE(mutTxCpy.IsScVersion());
+    EXPECT_TRUE(mutTxCpy.vsc_ccout == mutTx.vsc_ccout);
+    EXPECT_TRUE(mutTxCpy.vft_ccout == mutTx.vft_ccout);
 }
 
 TEST(checkSctransaction_tests, SideChain_CMutableTransaction_AssignementOp) {
     CMutableTransaction mutTx = gtestUtils::createSidechainTxWith(uint256S("aaaa"), CAmount(100));
+    CMutableTransaction mutTxCpy;
+    
+    mutTxCpy = mutTx;
 
-    //prerequisites
-    ASSERT_TRUE(mutTx.IsScVersion())<<"Test requires at least a side chain tx";
-    ASSERT_TRUE(mutTx.vsc_ccout.size() != 0)<<"Test requires at least a ScCreationOut inserted";
-    ASSERT_TRUE(mutTx.vft_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
-
-    //test
-    CMutableTransaction aCopyOfMutableTx;
-    aCopyOfMutableTx = mutTx;
-
-    //checks
-    EXPECT_TRUE(aCopyOfMutableTx.IsScVersion());
-    EXPECT_TRUE(aCopyOfMutableTx.vsc_ccout == mutTx.vsc_ccout);
-    EXPECT_TRUE(aCopyOfMutableTx.vft_ccout == mutTx.vft_ccout);
+    EXPECT_TRUE(mutTxCpy.IsScVersion());
+    EXPECT_TRUE(mutTxCpy.vsc_ccout == mutTx.vsc_ccout);
+    EXPECT_TRUE(mutTxCpy.vft_ccout == mutTx.vft_ccout);
 }
 
 TEST(checkSctransaction_tests, SideChain_CTransaction_CopyCtor) {
     CMutableTransaction mutTx = gtestUtils::createSidechainTxWith(uint256S("aaaa"), CAmount(100));
-
-    //prerequisites
-    ASSERT_TRUE(mutTx.IsScVersion())<<"Test requires at least a side chain tx";
-    ASSERT_TRUE(mutTx.vsc_ccout.size() != 0)<<"Test requires at least a ScCreationOut inserted";
-    ASSERT_TRUE(mutTx.vft_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
-
-    //test
     CTransaction aTx(mutTx);
+
     CTransaction aCopyOfTx(aTx);
 
-    aCopyOfTx = aTx;
-
-    //checks
     EXPECT_TRUE(aCopyOfTx.IsScVersion());
     EXPECT_TRUE(aCopyOfTx.vsc_ccout == aTx.vsc_ccout);
     EXPECT_TRUE(aCopyOfTx.vft_ccout == aTx.vft_ccout);
@@ -519,19 +496,11 @@ TEST(checkSctransaction_tests, SideChain_CTransaction_CopyCtor) {
 
 TEST(checkSctransaction_tests, SideChain_CTransaction_AssignmentOp) {
     CMutableTransaction mutTx = gtestUtils::createSidechainTxWith(uint256S("aaaa"), CAmount(100));
-
-    //prerequisites
-    ASSERT_TRUE(mutTx.IsScVersion())<<"Test requires at least a side chain tx";
-    ASSERT_TRUE(mutTx.vsc_ccout.size() != 0)<<"Test requires at least a ScCreationOut inserted";
-    ASSERT_TRUE(mutTx.vft_ccout.size() != 0)<<"Test requires at least a CTxForwardTransferOut inserted";
-
-    //test
     CTransaction aTx(mutTx);
     CTransaction aCopyOfTx;
 
     aCopyOfTx = aTx;
 
-    //checks
     EXPECT_TRUE(aCopyOfTx.IsScVersion());
     EXPECT_TRUE(aCopyOfTx.vsc_ccout == aTx.vsc_ccout);
     EXPECT_TRUE(aCopyOfTx.vft_ccout == aTx.vft_ccout);
@@ -539,60 +508,20 @@ TEST(checkSctransaction_tests, SideChain_CTransaction_AssignmentOp) {
 
 /////////////////////////// CTxForwardTransferOut
 TEST(checkSctransaction_tests, CTxForwardTransferOut_DefaultCtorCreatesNullOutput) {
-    //test
     CTxForwardTransferOut aNullFwrTransferOutput;
 
-    //checks
     EXPECT_TRUE(aNullFwrTransferOutput.IsNull());
 }
 
-TEST(checkSctransaction_tests, CTxForwardTransferOut_AmountSetToMinus1MakesOutputNull) {
-    CTxForwardTransferOut aNullFwrTransferOutput(CAmount(-1), uint256S("1989"), uint256S("2008"));
+TEST(checkSctransaction_tests, CTxForwardTransferOut_NegativeCAmountTests) {
+    CTxForwardTransferOut aNullFwrTransferOutput(CAmount(-1), uint256S("aaa"), uint256S("1234"));
+    EXPECT_TRUE(aNullFwrTransferOutput.IsNull());
 
-    //prerequisites
-    ASSERT_TRUE(aNullFwrTransferOutput.nValue == CAmount(-1))<<"Test requires amount set to -1";
-    ASSERT_FALSE(aNullFwrTransferOutput.scId.IsNull())<<"Test requires not null scId";
-    ASSERT_FALSE(aNullFwrTransferOutput.address.IsNull())<<"Test requires not null address";
-
-
-    //test
-    bool res = aNullFwrTransferOutput.IsNull();
-
-    //checks
-    EXPECT_TRUE(res);
+    CTxForwardTransferOut aNegativeFwrTransferOutput(CAmount(-2), uint256S("aaa"), uint256S("1234"));
+    EXPECT_FALSE(aNegativeFwrTransferOutput.IsNull());
 }
 
-TEST(checkSctransaction_tests, CTxForwardTransferOut_NoNegativeAmountMakeOutputNotNull) {
-    CTxForwardTransferOut aNullFwrTransferOutput(CAmount(0), uint256S(""), uint256S(""));
-
-    //prerequisites
-    ASSERT_TRUE(aNullFwrTransferOutput.nValue > CAmount(-1))<<"Test requires amount set to non negative value";
-    ASSERT_TRUE(aNullFwrTransferOutput.scId.IsNull())<<"Test requires null scId";
-    ASSERT_TRUE(aNullFwrTransferOutput.address.IsNull())<<"Test requires null address";
-
-    //test
-    bool res = aNullFwrTransferOutput.IsNull();
-
-    //checks
-    EXPECT_FALSE(res);
-}
-
-TEST(checkSctransaction_tests, CTxForwardTransferOut_NegativeAmountMakeOutputNotNull) {
-    CTxForwardTransferOut aNullFwrTransferOutput(CAmount(-2), uint256S(""), uint256S(""));
-
-    //prerequisites
-    ASSERT_TRUE(aNullFwrTransferOutput.nValue < CAmount(-1))<<"Test requires amount set to negative value different from -1";
-    ASSERT_TRUE(aNullFwrTransferOutput.scId.IsNull())<<"Test requires null scId";
-    ASSERT_TRUE(aNullFwrTransferOutput.address.IsNull())<<"Test requires null address";
-
-    //test
-    bool res = aNullFwrTransferOutput.IsNull();
-
-    //checks
-    EXPECT_FALSE(res);
-}
-
-TEST(checkSctransaction_tests, CTxForwardTransferOut_CmpOp_ValueAddressAndScIdAreEvaluatedForEqualityAndInequality) {
+TEST(checkSctransaction_tests, CTxForwardTransferOut_ValueAddressAndScIdDefineEquivalence) {
     CTxForwardTransferOut lhsOut(CAmount(10), uint256S("1912"), uint256S("1789"));
     CTxForwardTransferOut rhsOut(CAmount(10), uint256S("1912"), uint256S("1789"));
 
@@ -600,85 +529,35 @@ TEST(checkSctransaction_tests, CTxForwardTransferOut_CmpOp_ValueAddressAndScIdAr
     CTxForwardTransferOut rhsOut_OddAddress(CAmount(10), uint256S(""),     uint256S("1789"));
     CTxForwardTransferOut rhsOut_OddScId   (CAmount(10), uint256S("1912"), uint256S("1815"));
 
-    //Prerequisites
-    ASSERT_TRUE(lhsOut.nValue != rhsOut_OddAmount.nValue);
-    ASSERT_TRUE(lhsOut.address != rhsOut_OddAddress.address);
-    ASSERT_TRUE(lhsOut.scId != rhsOut_OddScId.scId);
-
-    //test
-    bool resEq          = lhsOut == rhsOut;
-    bool res_OddAmount  = lhsOut == rhsOut_OddAmount;
-    bool res_OddAddress = lhsOut != rhsOut_OddAddress;
-    bool res_OddScId    = lhsOut != rhsOut_OddScId;
-
-    //checks
-    EXPECT_TRUE(resEq)          <<"Outputs with same amount, address and ScId do not compare equal";
-    EXPECT_FALSE(res_OddAmount) <<"Outputs different amounts do compare equal";
-    EXPECT_TRUE(res_OddAddress) <<"Outputs different address do compare equal";
-    EXPECT_TRUE(res_OddScId)    <<"Outputs different ScId    do compare equal";
+    EXPECT_TRUE(lhsOut == rhsOut);
+    EXPECT_FALSE(lhsOut == rhsOut_OddAmount);
+    EXPECT_TRUE(lhsOut != rhsOut_OddAddress);
+    EXPECT_TRUE(lhsOut != rhsOut_OddScId);
 }
 
-TEST(checkSctransaction_tests, CTxForwardTransferOut_NonZeroFeeRate_DustThresholdIsThreeTimesFeeForMinimalTxSize) {
-    CTxForwardTransferOut anOutput;
-    CFeeRate theMinimalFeeRate(CAmount(1000));
+TEST(checkSctransaction_tests, FwdTransfersCanBeCheckedAgainstDust) {
+    CFeeRate targetFeeRate(14);
+    CAmount dustAmount = 3 * targetFeeRate.GetFee(GetSerializeSize(SER_DISK,0)+148u);
 
-    unsigned int minimalOutputSize = GetSerializeSize(SER_DISK,0);
-    unsigned int minimalInputSize  = 148u;
+    CTxForwardTransferOut anOutputAboveDust(dustAmount + 1, uint256S(""), uint256S(""));
+    CTxForwardTransferOut anOutputAtDust(dustAmount, uint256S(""), uint256S(""));
+    CTxForwardTransferOut anOutputBelowDust(dustAmount -1, uint256S(""), uint256S(""));
 
-    CAmount expectedDustThreshold = 3 * theMinimalFeeRate.GetFee(minimalInputSize + minimalOutputSize);
-
-    //prerequisites
-    ASSERT_TRUE(theMinimalFeeRate.GetFeePerK() != 0)<<"Test requires non-zero feeRate";
-
-     //test
-    CAmount dustThreshold = anOutput.GetDustThreshold(theMinimalFeeRate);
-
-    //checks
-    EXPECT_TRUE(dustThreshold == expectedDustThreshold)
-        <<"expected dust threshold was "<< expectedDustThreshold
-        <<", while return value is "<<dustThreshold;
+    EXPECT_FALSE(anOutputAboveDust.IsDust(targetFeeRate));
+    EXPECT_FALSE(anOutputAtDust.IsDust(targetFeeRate));
+    EXPECT_TRUE(anOutputBelowDust.IsDust(targetFeeRate));
 }
 
-TEST(checkSctransaction_tests, CTxForwardTransferOut_ZeroFeeRate_DustThresholdIsThreeTimesFeeForMinimalTxSize) {
-    CTxForwardTransferOut anOutput;
-    CFeeRate theMinimalFeeRate;
+/////////////////////////// CTxScCreationOut
 
-    unsigned int minimalOutputSize = GetSerializeSize(SER_DISK,0);
-    unsigned int minimalInputSize  = 148u;
+TEST(checkSctransaction_tests, CTxScCreationOut_ScIdAndWithdrawalEpochLenDefineEquivalence) {
+    CTxScCreationOut lhsOut(uint256S("1912"), 1987);
+    CTxScCreationOut rhsOut(uint256S("1912"), 1987);
 
-    CAmount expectedDustThreshold = 3 * theMinimalFeeRate.GetFee(minimalInputSize + minimalOutputSize);
+    CTxScCreationOut rhsOut_OddScId (uint256S("1000"), 1987);
+    CTxScCreationOut rhsOut_OddWithdrawalEpochLen(uint256S("1912"), 10);
 
-    //prerequisites
-    ASSERT_TRUE(theMinimalFeeRate.GetFeePerK() == 0)<<"Test requires zero feeRate";
-
-     //test
-    CAmount dustThreshold = anOutput.GetDustThreshold(theMinimalFeeRate);
-
-    //checks
-    EXPECT_TRUE(dustThreshold == expectedDustThreshold)
-        <<"expected dust threshold was "<< expectedDustThreshold
-        <<", while return value is "<<dustThreshold;
+    EXPECT_TRUE(lhsOut == rhsOut);
+    EXPECT_FALSE(lhsOut == rhsOut_OddScId);
+    EXPECT_TRUE(lhsOut != rhsOut_OddWithdrawalEpochLen);
 }
-
-//TEST(checkSctransaction_tests, IsDustCompareAmountWithDustThreshold) {
-//    CFeeRate targetFeeRate(14);
-//    CTxForwardTransferOut anOutputAboveDust(CAmount(7), uint256S(""), uint256S(""));
-//    CTxForwardTransferOut anOutputAtDust(CAmount(6), uint256S(""), uint256S(""));
-//    CTxForwardTransferOut anOutputBelowDust(CAmount(5), uint256S(""), uint256S(""));
-//
-//    //prerequisites
-//    ASSERT_TRUE(anOutputAboveDust.nValue > targetFeeRate.GetFeePerK());
-//    ASSERT_TRUE(anOutputAtDust.nValue == targetFeeRate.GetFeePerK());
-//    ASSERT_TRUE(anOutputBelowDust.nValue < targetFeeRate.GetFeePerK());
-//
-//    //test
-//    bool resAbove = anOutputAboveDust.IsDust(targetFeeRate);
-//    bool resAt = anOutputAtDust.IsDust(targetFeeRate);
-//    bool resBelow = anOutputBelowDust.IsDust(targetFeeRate);
-//
-//    //checks
-//    EXPECT_FALSE(resAbove);
-//    EXPECT_TRUE(resAt);
-//    EXPECT_TRUE(resBelow);
-//}
-
