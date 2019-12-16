@@ -555,7 +555,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
     if (strMode != "template")
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid mode");
 
-/*
+/* TODO this is for testing, remove comments
     if (vNodes.empty())
         throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Horizen is not connected!");
 */
@@ -657,7 +657,6 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
     UniValue transactions(UniValue::VARR);
     UniValue certificates(UniValue::VARR);
     map<uint256, int64_t> setTxIndex;
-    map<uint256, int64_t> setCertIndex;
     int i = 0;
     BOOST_FOREACH (const CTransaction& tx, pblock->vtx) {
         uint256 txHash = tx.GetHash();
@@ -701,22 +700,17 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
         }
     }
 
-    // TODO check this 
+    int cert_idx_in_template = 0;
     BOOST_FOREACH (const CScCertificate& cert, pblock->vcert) {
         uint256 certHash = cert.GetHash();
-        setCertIndex[certHash] = i++;
-
         UniValue entry(UniValue::VOBJ);
 
         entry.push_back(Pair("data", EncodeHexCert(cert)));
-
         entry.push_back(Pair("hash", certHash.GetHex()));
-
-        int index_in_template = i - 1;
-        entry.push_back(Pair("fee", pblocktemplate->vTxFees[index_in_template]));
-        entry.push_back(Pair("sigops", pblocktemplate->vTxSigOps[index_in_template]));
-
+        entry.push_back(Pair("fee", pblocktemplate->vCertFees[cert_idx_in_template]));
         certificates.push_back(entry);
+
+        cert_idx_in_template++;
     }
 
     UniValue aux(UniValue::VOBJ);

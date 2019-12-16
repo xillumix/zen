@@ -1708,7 +1708,7 @@ bool GetCertificate(const uint256 &hash, CScCertificate &certOut, uint256 &hashB
         return true;
     }
 
-#if 0 // TODO
+#if 1 // TODO
     if (fTxIndex) {
         CDiskTxPos postx;
         if (pblocktree->ReadTxIndex(hash, postx)) {
@@ -1719,12 +1719,12 @@ bool GetCertificate(const uint256 &hash, CScCertificate &certOut, uint256 &hashB
             try {
                 file >> header;
                 fseek(file.Get(), postx.nTxOffset, SEEK_CUR);
-                file >> txOut;
+                file >> certOut;
             } catch (const std::exception& e) {
                 return error("%s: Deserialize or I/O error - %s", __func__, e.what());
             }
             hashBlock = header.GetHash();
-            if (txOut.GetHash() != hash)
+            if (certOut.GetHash() != hash)
                 return error("%s: txid mismatch", __func__);
             return true;
         }
@@ -1745,9 +1745,9 @@ bool GetCertificate(const uint256 &hash, CScCertificate &certOut, uint256 &hashB
     if (pindexSlow) {
         CBlock block;
         if (ReadBlockFromDisk(block, pindexSlow)) {
-            BOOST_FOREACH(const CTransaction &tx, block.vtx) {
+            BOOST_FOREACH(const CScCertificate &tx, block.vcert) {
                 if (tx.GetHash() == hash) {
-                    txOut = tx;
+                    certOut = tx;
                     hashBlock = pindexSlow->GetBlockHash();
                     return true;
                 }
@@ -2633,6 +2633,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     int nInputs = 0;
     unsigned int nSigOps = 0;
     CDiskTxPos pos(pindex->GetBlockPos(), GetSizeOfCompactSize(block.vtx.size()));
+    LogPrint("cert", "%s():%d - ############# starting nTxOffset=%d\n", __func__, __LINE__, pos.nTxOffset );
     std::vector<std::pair<uint256, CDiskTxPos> > vPos;
     vPos.reserve(block.vtx.size());
     blockundo.vtxundo.reserve(block.vtx.size() - 1);
@@ -2767,11 +2768,21 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         tx.HandleJoinSplitCommittments(tree);
 #endif
 
-        vPos.push_back(std::make_pair(tx.GetHash(), pos));
 #if 0
+        vPos.push_back(std::make_pair(tx.GetHash(), pos));
         pos.nTxOffset += ::GetSerializeSize(tx, SER_DISK, CLIENT_VERSION);
 #else
+        if (i == block.vtx.size())
+        {
+            // we are processing the first certificate, add the size of the vcert to the offset
+            int sz = GetSizeOfCompactSize(block.vcert.size());
+            LogPrint("cert", "%s():%d - adding %d to nTxOffset\n", __func__, __LINE__, sz );
+            pos.nTxOffset += sz;
+            LogPrint("cert", "%s():%d - nTxOffset=%d\n", __func__, __LINE__, pos.nTxOffset );
+        }
+        vPos.push_back(std::make_pair(tx.GetHash(), pos));
         pos.nTxOffset += tx.CalculateSize();
+        LogPrint("cert", "%s():%d - nTxOffset=%d\n", __func__, __LINE__, pos.nTxOffset );
 #endif
     }
 

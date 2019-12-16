@@ -5,6 +5,8 @@
 #include "validationinterface.h"
 #include "coins.h"
 #include "core_io.h"
+#include "miner.h"
+#include "utilmoneystr.h"
 
 CScCertificate::CScCertificate() : CTransactionBase(), scId(), totalAmount(), vbt_ccout(), nonce() { }
 
@@ -74,10 +76,15 @@ CAmount CScCertificate::GetValueBackwardTransferCcOut() const
 
 void CScCertificate::AddToBlock(CBlock* pblock) const
 {
-    LogPrint("cert", "%s():%d - adding to block cert %s\n",
-        __func__, __LINE__, GetHash().ToString());
-
+    LogPrint("cert", "%s():%d - adding to block cert %s\n", __func__, __LINE__, GetHash().ToString());
     pblock->vcert.push_back(*this);
+}
+
+void CScCertificate::AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int /* not used sigops */) const
+{
+    LogPrint("cert", "%s():%d - adding to block templ cert %s, fee=%s\n", __func__, __LINE__,
+        GetHash().ToString(), FormatMoney(fee));
+    pblocktemplate->vCertFees.push_back(fee);
 }
 
 CAmount CScCertificate::GetFeeAmount(CAmount /* unused */) const
@@ -101,7 +108,9 @@ unsigned int CScCertificate::CalculateModifiedSize(unsigned int /* unused nTxSiz
 
 unsigned int CScCertificate::CalculateSize() const
 {
-    return ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION);
+    unsigned int sz = ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION);
+    LogPrint("cert", "%s():%d -sz=%u\n", __func__, __LINE__, sz);
+    return sz;
 }
 
 std::string CScCertificate::EncodeHex() const

@@ -18,6 +18,8 @@
 #include "validationinterface.h"
 #include "undo.h"
 #include "core_io.h"
+#include "miner.h"
+#include "utilmoneystr.h"
 
 JSDescription JSDescription::getNewInstance(bool useGroth) {
 	JSDescription js;
@@ -443,7 +445,12 @@ bool CTransaction::IsValidLoose() const
 
 unsigned int CTransaction::CalculateSize() const
 {
-    return ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION);
+    unsigned int sz = ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION);
+    LogPrint("cert", "%s():%d -sz=%u\n", __func__, __LINE__, sz);
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << *this;
+    LogPrint("cert", "%s():%d -hex=%s\n", __func__, __LINE__, HexStr(ss.begin(), ss.end()) );
+    return sz;
 }
 
 std::string CTransaction::ToString() const
@@ -515,6 +522,7 @@ void CTransaction::getCrosschainOutputs(std::map<uint256, std::vector<uint256> >
 // in zen-tx binary build configuration
 #ifdef BITCOIN_TX
 void CTransaction::AddToBlock(CBlock* pblock) const { return; }
+void CTransaction::AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int sigops) const {return; }
 CAmount CTransaction::GetValueIn(const CCoinsViewCache& view) const { return 0; }
 int CTransaction::GetNumbOfInputs() const { return 0; }
 bool CTransaction::CheckInputsLimit(size_t limit, size_t& n) const { return true; }
@@ -545,7 +553,16 @@ std::string CTransaction::EncodeHex() const { return ""; }
 //----- 
 void CTransaction::AddToBlock(CBlock* pblock) const 
 {
+    LogPrint("cert", "%s():%d - adding to block tx %s\n", __func__, __LINE__, GetHash().ToString());
     pblock->vtx.push_back(*this);
+}
+
+void CTransaction::AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int sigops) const
+{
+    LogPrint("cert", "%s():%d - adding to block templ tx %s, fee=%s, sigops=%u\n", __func__, __LINE__,
+        GetHash().ToString(), FormatMoney(fee), sigops);
+    pblocktemplate->vTxFees.push_back(fee);
+    pblocktemplate->vTxSigOps.push_back(sigops);
 }
 
 CAmount CTransaction::GetValueIn(const CCoinsViewCache& view) const

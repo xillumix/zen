@@ -30,10 +30,13 @@ class headers(BitcoinTestFramework):
     def setup_network(self, split=False):
         self.nodes = []
 
-        self.nodes = start_nodes(2, self.options.tmpdir, extra_args=
-            [['-debug=py', '-debug=sc', '-debug=mempool', '-debug=net', '-debug=cert', '-logtimemicros=1']] * 2 )
+        self.nodes = start_nodes(3, self.options.tmpdir, extra_args=
+            [['-debug=py', '-debug=sc', '-debug=mempool', '-debug=net', '-debug=cert', '-logtimemicros=1']] * 3 )
 
         connect_nodes_bi(self.nodes, 0, 1)
+        connect_nodes_bi(self.nodes, 1, 2)
+        sync_blocks(self.nodes[1:3])
+        sync_mempools(self.nodes[1:3])
         self.is_network_split = split
         self.sync_all()
 
@@ -68,7 +71,7 @@ class headers(BitcoinTestFramework):
         #forward transfer amount
         creation_amount = Decimal("0.5")
         fwt_amount = Decimal("2.5")
-        bwt_amount = Decimal("1.0")
+        bwt_amount = Decimal("100.0")
 
         blocks = []
         self.bl_count = 0
@@ -101,35 +104,12 @@ class headers(BitcoinTestFramework):
         ownerBlock = blocks[-1]
         self.sync_all()
 
-#        print "\nChecking sc info on the network..."
-#        print "Node 0: ", self.nodes[0].getscinfo(scid)
-#        print "Node 1: ", self.nodes[1].getscinfo(scid)
-
-#        self.mark_logs("\nNode 1 performs a fwd transfer of "+str(fwt_amount)+" coins ...")
-
-#        tx = self.nodes[1].sc_send("abcd", fwt_amount, scid);
-#        print "tx=" + tx
-#        self.sync_all()
-
-#        print("\nNode0 generating 1 honest block")
-#        blocks.extend(self.nodes[0].generate(1))
-#        self.sync_all()
-
-#        print "\nChecking sc info on the network..."
-#        print "Node 0: ", self.nodes[0].getscinfo(scid)
-#        print "Node 1: ", self.nodes[1].getscinfo(scid)
-
-#        print "\nNode1 balance: ", self.nodes[1].getbalance("", 0)
-
-#        assert_equal(self.nodes[1].getscinfo(scid)["balance"], creation_amount + fwt_amount) 
-#        assert_equal(self.nodes[1].getscinfo(scid)["created in block"], ownerBlock) 
-
         taddr = self.nodes[1].getnewaddress();
-        self.mark_logs("\nNode 1 performs a bwd transfer of "+str(bwt_amount)+" coins to taddr["+str(taddr)+"]...")
+        self.mark_logs("\nNode 0 performs a bwd transfer of "+str(bwt_amount)+" coins to taddr["+str(taddr)+"]...")
 #        raw_input("press enter to go on..")
         amounts = []
         amounts.append( {"address":taddr, "amount": bwt_amount})
-        cert = self.nodes[1].sc_bwdtr(scid, amounts);
+        cert = self.nodes[0].sc_bwdtr(scid, amounts);
         print "cert = " + cert
         #self.sync_all()
         time.sleep(1)
@@ -137,20 +117,34 @@ class headers(BitcoinTestFramework):
         print "\nChecking mempools..."
         print "Node 0: ", self.nodes[0].getrawmempool()
         print "Node 1: ", self.nodes[1].getrawmempool()
-#        print "Node 2: ", self.nodes[2].getrawmempool()
-
-        print("\nNode0 generating 1 honest block")
-        blocks.extend(self.nodes[0].generate(1))
-        #self.sync_all()
-        time.sleep(1)
-
-        print "\nChecking mempools..."
-        print "Node 0: ", self.nodes[0].getrawmempool()
-        print "Node 1: ", self.nodes[1].getrawmempool()
-#        print "Node 2: ", self.nodes[2].getrawmempool()
 
         print "\nNode1 balance: ", self.nodes[1].getbalance("", 0)
 
+        print("\nNode0 generating 1 honest block")
+        blocks.extend(self.nodes[0].generate(1))
+        self.sync_all()
+        #time.sleep(1)
+
+        print "Node0 balance: ", self.nodes[0].getbalance("", 0)
+        print "Node1 balance: ", self.nodes[1].getbalance("", 0)
+        print "Node2 balance: ", self.nodes[2].getbalance("", 0)
+
+        self.mark_logs("\nNode 1 sends "+str(bwt_amount/2)+" coins to node2...")
+        tx = self.nodes[1].sendtoaddress(self.nodes[2].getnewaddress(), bwt_amount/2)
+
+        # check that input is formed using the certificate
+        vin = self.nodes[1].getrawtransaction(tx, 1)['vin']
+        assert_equal(vin[0]['txid'], cert)
+
+        print("\nNode0 generating 1 honest block")
+        blocks.extend(self.nodes[0].generate(1))
+        self.sync_all()
+        #time.sleep(1)
+
+        print "Node0 balance: ", self.nodes[0].getbalance("", 0)
+        print "Node1 balance: ", self.nodes[1].getbalance("", 0)
+        print "Node2 balance: ", self.nodes[2].getbalance("", 0)
+        print
 
 
 

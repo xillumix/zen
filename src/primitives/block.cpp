@@ -151,7 +151,7 @@ uint256 CBlock::BuildScMerkleRootsMap()
     return BuildMerkleRootHash(vSortedLeaves);
 }
 
-#define DEBUG_MERKLE_BRANCH 1
+//#define DEBUG_MERKLE_BRANCH 1
 
 std::vector<uint256> CBlock::GetMerkleBranch(int nIndex) const
 {

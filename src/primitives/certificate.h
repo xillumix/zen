@@ -86,6 +86,7 @@ public:
     std::string ToString() const override;
 
     void AddToBlock(CBlock* pblock) const; 
+    void AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int /* not used sigops */) const;
 
     bool Check(CValidationState& state, libzcash::ProofVerifier& verifier) const { return true; /*TODO*/ }
     bool ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const { return true; /*TODO*/ }

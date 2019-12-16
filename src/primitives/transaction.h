@@ -624,6 +624,7 @@ class CTxMemPool;
 class CCoinsViewCache;
 class CChain;
 class CBlock;
+class CBlockTemplate;
 class CScriptCheck;
 class CBlockUndo;
 
@@ -693,6 +694,7 @@ public:
     virtual std::string ToString() const = 0;
 
     virtual void AddToBlock(CBlock* pblock) const = 0;
+    virtual void AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int sigops) const = 0;
 
     // default values for derived classes not supporting specific data structures
     virtual bool IsCoinBase() const { return false; };
@@ -920,6 +922,7 @@ public:
 
   public:
     void AddToBlock(CBlock* pblock) const;
+    void AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int sigops) const;
     CAmount GetJoinSplitValueIn() const;
     int GetNumbOfInputs() const;
     bool CheckInputsLimit(size_t limit, size_t& n) const;

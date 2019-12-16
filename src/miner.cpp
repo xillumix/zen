@@ -227,7 +227,12 @@ void GetBlockTxPriorityData(const CBlock *pblock, int nHeight, int64_t nMedianTi
             porphan->feeRate = feeRate;
         }
         else
+        {
+            LogPrint("cert", "%s():%d - adding to prio vec tx = %s, prio=%f, feeRate=%s\n",
+                __func__, __LINE__, hash.ToString(), dPriority, feeRate.ToString());
+
             vecPriority.push_back(TxPriority(dPriority, feeRate, &mi->second.GetTx()));
+        }
     }
 }
 
@@ -408,6 +413,9 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
         TxPriorityCompare comparer(fSortedByFee);
         std::make_heap(vecPriority.begin(), vecPriority.end(), comparer);
 
+        // TODO for the time being, vecPriority contains certs beforehand and after them all txes
+        // considering certs having a higher priority than any possible tx.
+        // Devise a proper alogorithm for managing tx/cert priorities
         while (!vecPriority.empty())
         {
             // Take highest priority transaction off the priority queue:
@@ -524,11 +532,12 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
             // Added
 #if 0
             pblock->vtx.push_back(tx);
-#else
-            tx.AddToBlock(pblock);
-#endif
             pblocktemplate->vTxFees.push_back(nTxFees);
             pblocktemplate->vTxSigOps.push_back(nTxSigOps);
+#else
+            tx.AddToBlock(pblock);
+            tx.AddToBlockTemplate(pblocktemplate.get(), nTxFees, nTxSigOps);
+#endif
             nBlockSize += nTxSize;
             ++nBlockTx;
             nBlockSigOps += nTxSigOps;
