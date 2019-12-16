@@ -6,6 +6,8 @@
 #include "primitives/transaction.h"
 #include "consensus/validation.h"
 
+#include "gtestUtils.h"
+
 TEST(checktransaction_tests, check_vpub_not_both_nonzero) {
     CMutableTransaction tx;
     tx.nVersion = PHGR_TX_VERSION;
@@ -94,45 +96,42 @@ CMutableTransaction GetValidTransaction() {
 }
 
 TEST(checktransaction_tests, valid_transparent_transaction) {
-    CMutableTransaction mtx = GetValidTransaction();
-    mtx.vjoinsplit.resize(0);
-    mtx.nVersion = 1;
-    CTransaction tx(mtx);
+    CTransaction tx = gtestUtils::createTransparentTx();
     MockCValidationState state;
+
     EXPECT_TRUE(CheckTransactionWithoutProofVerification(tx, state));
 }
 
 TEST(checktransaction_tests, valid_sprout_transaction) {
-    CMutableTransaction mtx = GetValidTransaction();
-    CTransaction tx(mtx);
+    CTransaction tx = gtestUtils::createSproutTx();
     MockCValidationState state;
+
     EXPECT_TRUE(CheckTransactionWithoutProofVerification(tx, state));
 }
 
 TEST(checktransaction_tests, BadVersionTooLow) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
     mtx.nVersion = 0;
-
     CTransaction tx(mtx);
     MockCValidationState state;
     EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-version-too-low", false)).Times(1);
+
     CheckTransactionWithoutProofVerification(tx, state);
 }
 
 TEST(checktransaction_tests, bad_txns_vin_empty) {
-    CMutableTransaction mtx = GetValidTransaction();
-    mtx.vjoinsplit.resize(0);
+    CMutableTransaction mtx = gtestUtils::createTransparentTx();
     mtx.vin.resize(0);
 
     CTransaction tx(mtx);
+
     MockCValidationState state;
     EXPECT_CALL(state, DoS(10, false, REJECT_INVALID, "bad-txns-vin-empty", false)).Times(1);
     CheckTransactionWithoutProofVerification(tx, state);
 }
 
 TEST(checktransaction_tests, bad_txns_vout_empty) {
-    CMutableTransaction mtx = GetValidTransaction();
-    mtx.vjoinsplit.resize(0);
+    CMutableTransaction mtx = gtestUtils::createTransparentTx();
     mtx.vout.resize(0);
 
     CTransaction tx(mtx);
@@ -143,7 +142,7 @@ TEST(checktransaction_tests, bad_txns_vout_empty) {
 }
 
 TEST(checktransaction_tests, bad_txns_oversize) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createTransparentTx();
     mtx.nVersion = 1;
     mtx.vjoinsplit.resize(0);
     mtx.vin[0].scriptSig = CScript();
@@ -174,7 +173,7 @@ TEST(checktransaction_tests, bad_txns_oversize) {
 }
 
 TEST(checktransaction_tests, bad_txns_vout_negative) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createTransparentTx();
     mtx.vout[0].nValue = -1;
 
     CTransaction tx(mtx);
@@ -185,7 +184,7 @@ TEST(checktransaction_tests, bad_txns_vout_negative) {
 }
 
 TEST(checktransaction_tests, bad_txns_vout_toolarge) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createTransparentTx();
     mtx.vout[0].nValue = MAX_MONEY + 1;
 
     CTransaction tx(mtx);
@@ -196,7 +195,7 @@ TEST(checktransaction_tests, bad_txns_vout_toolarge) {
 }
 
 TEST(checktransaction_tests, bad_txns_txouttotal_toolarge_outputs) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createTransparentTx();
     mtx.vout[0].nValue = MAX_MONEY;
     mtx.vout[1].nValue = 1;
 
@@ -208,7 +207,7 @@ TEST(checktransaction_tests, bad_txns_txouttotal_toolarge_outputs) {
 }
 
 TEST(checktransaction_tests, bad_txns_txouttotal_toolarge_joinsplit) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
     mtx.vout[0].nValue = 1;
     mtx.vjoinsplit[0].vpub_old = MAX_MONEY;
 
@@ -220,9 +219,9 @@ TEST(checktransaction_tests, bad_txns_txouttotal_toolarge_joinsplit) {
 }
 
 TEST(checktransaction_tests, bad_txns_txintotal_toolarge_joinsplit) {
-    CMutableTransaction mtx = GetValidTransaction();
-    mtx.vjoinsplit[0].vpub_new = MAX_MONEY - 1;
-    mtx.vjoinsplit[1].vpub_new = MAX_MONEY - 1;
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
+    mtx.vjoinsplit[0].vpub_new = 1;
+    mtx.vjoinsplit[1].vpub_new = MAX_MONEY;
 
     CTransaction tx(mtx);
 
@@ -232,7 +231,7 @@ TEST(checktransaction_tests, bad_txns_txintotal_toolarge_joinsplit) {
 }
 
 TEST(checktransaction_tests, bad_txns_vpub_old_negative) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
     mtx.vjoinsplit[0].vpub_old = -1;
 
     CTransaction tx(mtx);
@@ -243,7 +242,7 @@ TEST(checktransaction_tests, bad_txns_vpub_old_negative) {
 }
 
 TEST(checktransaction_tests, bad_txns_vpub_new_negative) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
     mtx.vjoinsplit[0].vpub_new = -1;
 
     CTransaction tx(mtx);
@@ -254,7 +253,7 @@ TEST(checktransaction_tests, bad_txns_vpub_new_negative) {
 }
 
 TEST(checktransaction_tests, bad_txns_vpub_old_toolarge) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
     mtx.vjoinsplit[0].vpub_old = MAX_MONEY + 1;
 
     CTransaction tx(mtx);
@@ -265,7 +264,7 @@ TEST(checktransaction_tests, bad_txns_vpub_old_toolarge) {
 }
 
 TEST(checktransaction_tests, bad_txns_vpub_new_toolarge) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
     mtx.vjoinsplit[0].vpub_new = MAX_MONEY + 1;
 
     CTransaction tx(mtx);
@@ -276,7 +275,7 @@ TEST(checktransaction_tests, bad_txns_vpub_new_toolarge) {
 }
 
 TEST(checktransaction_tests, bad_txns_vpubs_both_nonzero) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
     mtx.vjoinsplit[0].vpub_old = 1;
     mtx.vjoinsplit[0].vpub_new = 1;
 
@@ -288,7 +287,7 @@ TEST(checktransaction_tests, bad_txns_vpubs_both_nonzero) {
 }
 
 TEST(checktransaction_tests, bad_txns_inputs_duplicate) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
     mtx.vin[1].prevout.hash = mtx.vin[0].prevout.hash;
     mtx.vin[1].prevout.n = mtx.vin[0].prevout.n;
 
@@ -300,9 +299,9 @@ TEST(checktransaction_tests, bad_txns_inputs_duplicate) {
 }
 
 TEST(checktransaction_tests, bad_joinsplits_nullifiers_duplicate_same_joinsplit) {
-    CMutableTransaction mtx = GetValidTransaction();
-    mtx.vjoinsplit[0].nullifiers.at(0) = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
-    mtx.vjoinsplit[0].nullifiers.at(1) = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
+    mtx.vjoinsplit[0].nullifiers.at(0) = uint256S("0");
+    mtx.vjoinsplit[0].nullifiers.at(1) = uint256S("0");
 
     CTransaction tx(mtx);
 
@@ -312,9 +311,9 @@ TEST(checktransaction_tests, bad_joinsplits_nullifiers_duplicate_same_joinsplit)
 }
 
 TEST(checktransaction_tests, bad_joinsplits_nullifiers_duplicate_different_joinsplit) {
-    CMutableTransaction mtx = GetValidTransaction();
-    mtx.vjoinsplit[0].nullifiers.at(0) = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
-    mtx.vjoinsplit[1].nullifiers.at(0) = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
+    mtx.vjoinsplit[0].nullifiers.at(0) = uint256S("0");
+    mtx.vjoinsplit[1].nullifiers.at(0) = uint256S("0");
 
     CTransaction tx(mtx);
 
@@ -324,7 +323,7 @@ TEST(checktransaction_tests, bad_joinsplits_nullifiers_duplicate_different_joins
 }
 
 TEST(checktransaction_tests, bad_cb_has_joinsplits) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
     // Make it a coinbase.
     mtx.vin.resize(1);
     mtx.vin[0].prevout.SetNull();
@@ -340,7 +339,7 @@ TEST(checktransaction_tests, bad_cb_has_joinsplits) {
 }
 
 TEST(checktransaction_tests, bad_cb_empty_scriptsig) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
     // Make it a coinbase.
     mtx.vin.resize(1);
     mtx.vin[0].prevout.SetNull();
@@ -356,7 +355,7 @@ TEST(checktransaction_tests, bad_cb_empty_scriptsig) {
 }
 
 TEST(checktransaction_tests, bad_txns_prevout_null) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
     mtx.vin[1].prevout.SetNull();
 
     CTransaction tx(mtx);
@@ -368,7 +367,7 @@ TEST(checktransaction_tests, bad_txns_prevout_null) {
 }
 
 TEST(checktransaction_tests, bad_txns_invalid_joinsplit_signature) {
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
     mtx.joinSplitSig[0] += 1;
     CTransaction tx(mtx);
 
@@ -412,7 +411,7 @@ TEST(checktransaction_tests, non_canonical_ed25519_signature) {
 // given the new Overwinter logic
 TEST(checktransaction_tests, SproutTxVersionTooLow) {
 	SelectParams(CBaseChainParams::REGTEST);
-    CMutableTransaction mtx = GetValidTransaction();
+    CMutableTransaction mtx = gtestUtils::createSproutTx();
     mtx.vjoinsplit.resize(0);
     mtx.nVersion = -1;
 
@@ -459,8 +458,6 @@ TEST(checktransaction_tests, PhgrTxVersion) {
 ///////////////////////////////////////////////////////////////////////////////
 /////////////////////////// SideChain-related tests ///////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
-
-#include "gtestUtils.h"
 
 TEST(checkSctransaction_tests, SideChain_CMutableTransaction_CopyCtor) {
     CMutableTransaction mutTx = gtestUtils::createSidechainTxWith(uint256S("aaaa"), CAmount(100));
@@ -513,14 +510,6 @@ TEST(checkSctransaction_tests, CTxForwardTransferOut_DefaultCtorCreatesNullOutpu
     EXPECT_TRUE(aNullFwrTransferOutput.IsNull());
 }
 
-TEST(checkSctransaction_tests, CTxForwardTransferOut_NegativeCAmountTests) {
-    CTxForwardTransferOut aNullFwrTransferOutput(CAmount(-1), uint256S("aaa"), uint256S("1234"));
-    EXPECT_TRUE(aNullFwrTransferOutput.IsNull());
-
-    CTxForwardTransferOut aNegativeFwrTransferOutput(CAmount(-2), uint256S("aaa"), uint256S("1234"));
-    EXPECT_FALSE(aNegativeFwrTransferOutput.IsNull());
-}
-
 TEST(checkSctransaction_tests, CTxForwardTransferOut_ValueAddressAndScIdDefineEquivalence) {
     CTxForwardTransferOut lhsOut(CAmount(10), uint256S("1912"), uint256S("1789"));
     CTxForwardTransferOut rhsOut(CAmount(10), uint256S("1912"), uint256S("1789"));
@@ -549,6 +538,8 @@ TEST(checkSctransaction_tests, FwdTransfersCanBeCheckedAgainstDust) {
 }
 
 /////////////////////////// CTxScCreationOut
+
+//Currently isNull is not defined for CTxScCreationOut. Should it?
 
 TEST(checkSctransaction_tests, CTxScCreationOut_ScIdAndWithdrawalEpochLenDefineEquivalence) {
     CTxScCreationOut lhsOut(uint256S("1912"), 1987);

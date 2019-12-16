@@ -15,9 +15,9 @@ CTransaction createFwdTransferTxWith(const uint256 & newScId, const CAmount & fw
 
 CTransaction createSidechainTxWithNoFwdTransfer(const uint256 & newScId);
 
-CTransaction createTransparentTx(bool ccIsNull);
+CTransaction createTransparentTx(bool ccIsNull = true); //ccIsNull = false allows generation of faulty tx with non-empty cross chain output
 
-CTransaction createSproutTx(bool ccIsNull);
+CTransaction createSproutTx(bool ccIsNull = true); //ccIsNull = false allows generation of faulty tx with non-empty cross chain output
 
 void extendTransaction(CTransaction & tx, const uint256 & scId, const CAmount & amount);
 
