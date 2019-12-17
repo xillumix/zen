@@ -42,59 +42,6 @@ public:
     MOCK_CONST_METHOD0(GetRejectReason, std::string());
 };
 
-
-CMutableTransaction GetValidTransaction(int txVersion) {
-    CMutableTransaction mtx;
-    mtx.nVersion = txVersion;
-    mtx.vin.resize(2);
-    mtx.vin[0].prevout.hash = uint256S("0000000000000000000000000000000000000000000000000000000000000001");
-    mtx.vin[0].prevout.n = 0;
-    mtx.vin[1].prevout.hash = uint256S("0000000000000000000000000000000000000000000000000000000000000002");
-    mtx.vin[1].prevout.n = 0;
-    mtx.vout.resize(2);
-    // mtx.vout[0].scriptPubKey = 
-    mtx.vout[0].nValue = 0;
-    mtx.vout[1].nValue = 0;
-
-    mtx.vjoinsplit.clear();
-    mtx.vjoinsplit.push_back(JSDescription::getNewInstance(txVersion == GROTH_TX_VERSION));
-    mtx.vjoinsplit.push_back(JSDescription::getNewInstance(txVersion == GROTH_TX_VERSION));
-
-    mtx.vjoinsplit[0].nullifiers.at(0) = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
-    mtx.vjoinsplit[0].nullifiers.at(1) = uint256S("0000000000000000000000000000000000000000000000000000000000000001");
-    mtx.vjoinsplit[1].nullifiers.at(0) = uint256S("0000000000000000000000000000000000000000000000000000000000000002");
-    mtx.vjoinsplit[1].nullifiers.at(1) = uint256S("0000000000000000000000000000000000000000000000000000000000000003");
-
-
-    // Generate an ephemeral keypair.
-    uint256 joinSplitPubKey;
-    unsigned char joinSplitPrivKey[crypto_sign_SECRETKEYBYTES];
-    crypto_sign_keypair(joinSplitPubKey.begin(), joinSplitPrivKey);
-    mtx.joinSplitPubKey = joinSplitPubKey;
-
-    // Compute the correct hSig.
-    // TODO: #966.
-    static const uint256 one(uint256S("0000000000000000000000000000000000000000000000000000000000000001"));
-    // Empty output script.
-    CScript scriptCode;
-    CTransaction signTx(mtx);
-    uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL);
-    if (dataToBeSigned == one) {
-        throw std::runtime_error("SignatureHash failed");
-    }
-
-    // Add the signature
-    assert(crypto_sign_detached(&mtx.joinSplitSig[0], NULL,
-                         dataToBeSigned.begin(), 32,
-                         joinSplitPrivKey
-                        ) == 0);
-    return mtx;
-}
-
-CMutableTransaction GetValidTransaction() {
-    return GetValidTransaction(PHGR_TX_VERSION);
-}
-
 TEST(checktransaction_tests, valid_transparent_transaction) {
     CTransaction tx = gtestUtils::createTransparentTx();
     MockCValidationState state;
@@ -425,7 +372,7 @@ TEST(checktransaction_tests, SproutTxVersionTooLow) {
 
 TEST(checktransaction_tests, TransparentTxVersionWithJoinsplit) {
     SelectParams(CBaseChainParams::REGTEST);
-    CTransaction tx = GetValidTransaction(TRANSPARENT_TX_VERSION);;//gtestUtils::createTransparentTx(/*ccIsNull=*/true,/*withJoinSplit=*/false);
+    CTransaction tx = gtestUtils::createTransparentTx(/*ccIsNull=*/true,/*withJoinSplit=*/true);
 
     MockCValidationState state;
     EXPECT_TRUE(CheckTransactionWithoutProofVerification(tx, state));

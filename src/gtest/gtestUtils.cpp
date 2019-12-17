@@ -1,9 +1,11 @@
 #include "gtestUtils.h"
 #include <script/interpreter.h>
 
-#include <gtest/gtest.h>
-#include "main.h"
-#include <consensus/validation.h>
+//Includes for semantics checks
+//#include <gtest/gtest.h>
+//#include "main.h"
+//#include <consensus/validation.h>
+//End of Includes for semantics checks
 
 CMutableTransaction gtestUtils::populateTx(int txVersion, const uint256 & newScId, const CAmount & fwdTxAmount)
 {
@@ -114,8 +116,8 @@ CTransaction gtestUtils::createTransparentTx(bool ccIsNull, bool withJoinSplit)
     }
     signTx(mtx);
 
-    CValidationState txState;
-    assert(CheckTransactionWithoutProofVerification(mtx, txState));
+    //CValidationState txState;
+    //assert(CheckTransactionWithoutProofVerification(mtx, txState));
     return CTransaction(mtx);
 }
 
@@ -149,8 +151,8 @@ CTransaction gtestUtils::createGrothTx()
 
     signTx(mtx);
 
-    CValidationState txState;
-    assert(CheckTransactionWithoutProofVerification(mtx, txState));
+    //CValidationState txState;
+    //assert(CheckTransactionWithoutProofVerification(mtx, txState));
     return CTransaction(mtx);
 }
 
@@ -170,5 +172,8 @@ void gtestUtils::extendTransaction(CTransaction & tx, const uint256 & scId, cons
     mtx.vft_ccout.push_back(aForwardTransferTx);
 
     tx = mtx;
+
+    //CValidationState txState;
+    //assert(CheckTransactionWithoutProofVerification(mtx, txState));
     return;
 }
