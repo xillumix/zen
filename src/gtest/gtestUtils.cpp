@@ -1,6 +1,10 @@
 #include "gtestUtils.h"
 #include <script/interpreter.h>
 
+#include <gtest/gtest.h>
+#include "main.h"
+#include <consensus/validation.h>
+
 CMutableTransaction gtestUtils::populateTx(int txVersion, const uint256 & newScId, const CAmount & fwdTxAmount)
 {
     CMutableTransaction mtx;
@@ -63,6 +67,7 @@ CTransaction gtestUtils::createSidechainTxWith(const uint256 & newScId, const CA
     mtx.vjoinsplit.resize(0);
     signTx(mtx);
 
+    //CValidationState txState;
     //assert(CheckTransactionWithoutProofVerification(mtx, txState));
     return CTransaction(mtx);
 }
@@ -75,6 +80,7 @@ CTransaction gtestUtils::createFwdTransferTxWith(const uint256 & newScId, const 
     mtx.vsc_ccout.resize(0);
     signTx(mtx);
 
+    //CValidationState txState;
     //assert(CheckTransactionWithoutProofVerification(mtx, txState));
     return CTransaction(mtx);
 }
@@ -87,16 +93,19 @@ CTransaction gtestUtils::createSidechainTxWithNoFwdTransfer(const uint256 & newS
     mtx.vft_ccout.resize(0);
     signTx(mtx);
 
+    //CValidationState txState;
     //assert(CheckTransactionWithoutProofVerification(mtx, txState));
     return CTransaction(mtx);
 }
 
 // Well-formatted transparent txs have no sc-related info. 
 // ccisNull allow you to create a faulty transparent tx, for testing purposes.
-CTransaction gtestUtils::createTransparentTx(bool ccIsNull)
+CTransaction gtestUtils::createTransparentTx(bool ccIsNull, bool withJoinSplit)
 {
     CMutableTransaction mtx = populateTx(TRANSPARENT_TX_VERSION);
-    mtx.vjoinsplit.resize(0);
+
+    if (!withJoinSplit)
+        mtx.vjoinsplit.resize(0);
 
     if (ccIsNull)
     {
@@ -105,7 +114,8 @@ CTransaction gtestUtils::createTransparentTx(bool ccIsNull)
     }
     signTx(mtx);
 
-    //assert(CheckTransactionWithoutProofVerification(mtx, txState));
+    CValidationState txState;
+    assert(CheckTransactionWithoutProofVerification(mtx, txState));
     return CTransaction(mtx);
 }
 
@@ -124,7 +134,23 @@ CTransaction gtestUtils::createSproutTx(bool ccIsNull)
     }
     signTx(mtx);
 
+    //CValidationState txState;
     //assert(CheckTransactionWithoutProofVerification(mtx, txState));
+    return CTransaction(mtx);
+}
+
+CTransaction gtestUtils::createGrothTx()
+{
+    CMutableTransaction mtx;
+
+    mtx = populateTx(GROTH_TX_VERSION);
+    mtx.vsc_ccout.resize(0);
+    mtx.vft_ccout.resize(0);
+
+    signTx(mtx);
+
+    CValidationState txState;
+    assert(CheckTransactionWithoutProofVerification(mtx, txState));
     return CTransaction(mtx);
 }
 
