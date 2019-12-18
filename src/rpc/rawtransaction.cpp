@@ -1143,35 +1143,50 @@ UniValue sendrawcertificate(const UniValue& params, bool fHelp)
     CScCertificate cert;
     if (!DecodeHexCert(cert, params[0].get_str()))
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Certificate decode failed");
-    uint256 hashCertificate = cert.GetHash();
+    const uint256& hashCertificate = cert.GetHash();
 
     bool fOverrideFees = false;
     if (params.size() > 1)
         fOverrideFees = params[1].get_bool();
 
+    // check that we do not have it already somewhere
     CCoinsViewCache &view = *pcoinsTip;
     const CCoins* existingCoins = view.AccessCoins(hashCertificate);
+
+    bool fHaveChain = existingCoins;
     bool fHaveMempool = mempool.existsCert(hashCertificate);
-    bool fHaveChain = existingCoins && existingCoins->nHeight < 1000000000;
-    if (!fHaveMempool && !fHaveChain) {
+
+    if (!fHaveMempool && !fHaveChain)
+    {
         // push to local node and sync with wallets
         CValidationState state;
         bool fMissingInputs;
-        if (!AcceptToMemoryPool(mempool, state, cert, false, &fMissingInputs, !fOverrideFees)) {
-            if (state.IsInvalid()) {
+        if (!AcceptToMemoryPool(mempool, state, cert, false, &fMissingInputs, !fOverrideFees))
+        {
+            if (state.IsInvalid())
+            {
                 throw JSONRPCError(RPC_TRANSACTION_REJECTED, strprintf("%i: %s", state.GetRejectCode(), state.GetRejectReason()));
-            } else {
-                if (fMissingInputs) {
+            }
+            else
+            {
+                if (fMissingInputs)
+                {
                     throw JSONRPCError(RPC_TRANSACTION_ERROR, "Missing inputs");
                 }
                 throw JSONRPCError(RPC_TRANSACTION_ERROR, state.GetRejectReason());
             }
         }
-    } else if (fHaveChain) {
+    }
+    else if (fHaveChain)
+    {
         throw JSONRPCError(RPC_TRANSACTION_ALREADY_IN_CHAIN, "certificate already in block chain");
     }
+    else
+    {
+        LogPrint("cert", "%s():%d - cert[%s] is already in mempool, just realying it\n", __func__, __LINE__, hashCertificate.ToString());
+    }
 
-    LogPrint("cert", "%s():%d - relaying certificate [%s]\n", __func__, __LINE__, cert.GetHash().ToString());
+    LogPrint("cert", "%s():%d - relaying certificate [%s]\n", __func__, __LINE__, hashCertificate.ToString());
     RelayCertificate(cert);
 
     return hashCertificate.GetHex();

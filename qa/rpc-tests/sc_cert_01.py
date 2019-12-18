@@ -14,6 +14,7 @@ import shutil
 from random import randint
 from decimal import Decimal
 import logging
+import pprint
 
 import time
 class headers(BitcoinTestFramework):
@@ -70,8 +71,9 @@ class headers(BitcoinTestFramework):
 
         #forward transfer amount
         creation_amount = Decimal("0.5")
-        fwt_amount = Decimal("2.5")
-        bwt_amount = Decimal("100.0")
+        fwt_amount = Decimal("50")
+        bwt_amount_bad = Decimal("100.0")
+        bwt_amount = Decimal("50")
 
         blocks = []
         self.bl_count = 0
@@ -104,19 +106,53 @@ class headers(BitcoinTestFramework):
         ownerBlock = blocks[-1]
         self.sync_all()
 
-        taddr = self.nodes[1].getnewaddress();
-        self.mark_logs("\nNode 0 performs a bwd transfer of "+str(bwt_amount)+" coins to taddr["+str(taddr)+"]...")
-#        raw_input("press enter to go on..")
+        self.mark_logs("\nNode 0 performs a fwd transfer of "+str(fwt_amount)+" coins to SC...")
+
+        tx = self.nodes[0].sc_send("abcd", fwt_amount, scid);
+        print "tx=" + tx
+        self.sync_all()
+
+        self.mark_logs("\nNode0 generating 1 block")
+        blocks.extend(self.nodes[0].generate(1))
+        self.sync_all()
+
+        print "\nSC info:\n", pprint.pprint(self.nodes[0].getscinfo(scid))
+
+        pkh = self.nodes[1].getnewaddress("", True);
         amounts = []
-        amounts.append( {"address":taddr, "amount": bwt_amount})
-        cert = self.nodes[0].sc_bwdtr(scid, amounts);
-        print "cert = " + cert
+        cert = []
+
+        self.mark_logs("\nNode 0 tries to perform a bwd transfer of "+str(bwt_amount_bad)+" coins to pkh["+str(pkh)+"]...")
+        amounts.append( {"pubkeyhash":pkh, "amount": bwt_amount_bad})
+     
+        # check this is refused because sc has not balance enough
+        try:
+            cert = self.nodes[0].sc_bwdtr(scid, amounts);
+        except JSONRPCException,e:
+            errorString = e.error['message']
+            print "\n======> ", errorString
+
+        amounts = []
+        cert = []
+
+        self.mark_logs("\nNode 0 performs a bwd transfer of "+str(bwt_amount)+" coins to pkh["+str(pkh)+"]...")
+        amounts.append( {"pubkeyhash":pkh, "amount": bwt_amount})
+     
+        try:
+            cert = self.nodes[0].sc_bwdtr(scid, amounts);
+            print "cert = ", cert
+        except JSONRPCException,e:
+            errorString = e.error['message']
+            print errorString
+            assert(False)
+
         #self.sync_all()
         time.sleep(1)
 
         print "\nChecking mempools..."
         print "Node 0: ", self.nodes[0].getrawmempool()
         print "Node 1: ", self.nodes[1].getrawmempool()
+        print "Node 2: ", self.nodes[2].getrawmempool()
 
         print "\nNode1 balance: ", self.nodes[1].getbalance("", 0)
 

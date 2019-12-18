@@ -295,15 +295,25 @@ CTransactionBase::CTransactionBase(const CTransactionBase &tx) : nVersion(TRANSP
     *const_cast<std::vector<CTxOut>*>(&vout) = tx.vout;
 }
 
-double CTransactionBase::ComputePriority(double dPriorityInputs, unsigned int nTxSize) const
+bool CTransactionBase::CheckVout(CAmount& nValueOut, CValidationState &state) const
 {
-    // polymorphic call
-    nTxSize = CalculateModifiedSize(nTxSize);
-    if (nTxSize == 0) return 0.0;
-
-    return dPriorityInputs / nTxSize;
+    // Check for negative or overflow output values
+    nValueOut = 0;
+    BOOST_FOREACH(const CTxOut& txout, vout)
+    {
+        if (txout.nValue < 0)
+            return state.DoS(100, error("CheckVout(): txout.nValue negative"),
+                             REJECT_INVALID, "bad-txns-vout-negative");
+        if (txout.nValue > MAX_MONEY)
+            return state.DoS(100, error("CheckVout(): txout.nValue too high"),
+                             REJECT_INVALID, "bad-txns-vout-toolarge");
+        nValueOut += txout.nValue;
+        if (!MoneyRange(nValueOut))
+            return state.DoS(100, error("CheckVout(): txout total out of range"),
+                             REJECT_INVALID, "bad-txns-txouttotal-toolarge");
+    }
+    return true;
 }
-
 
 CTransaction::CTransaction() :
     CTransactionBase(), vin(),
@@ -374,6 +384,14 @@ unsigned int CTransaction::CalculateModifiedSize(unsigned int nTxSize) const
             nTxSize -= offset;
     }
     return nTxSize;
+}
+
+double CTransaction::ComputePriority(double dPriorityInputs, unsigned int nTxSize) const
+{
+    nTxSize = CalculateModifiedSize(nTxSize);
+    if (nTxSize == 0) return 0.0;
+
+    return dPriorityInputs / nTxSize;
 }
 
 CAmount CTransaction::GetValueOut() const
@@ -521,6 +539,9 @@ void CTransaction::getCrosschainOutputs(std::map<uint256, std::vector<uint256> >
 // need linking all of the related symbols. We use this macro as it is already defined with a similar purpose
 // in zen-tx binary build configuration
 #ifdef BITCOIN_TX
+bool CTransactionBase::CheckOutputsAreStandard(int nHeight, std::string& reason) const { return true; }
+bool CTransactionBase::CheckOutputsCheckBlockAtHeightOpCode(CValidationState& state) const { return true; }
+
 void CTransaction::AddToBlock(CBlock* pblock) const { return; }
 void CTransaction::AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int sigops) const {return; }
 CAmount CTransaction::GetValueIn(const CCoinsViewCache& view) const { return 0; }
@@ -551,6 +572,85 @@ std::string CTransaction::EncodeHex() const { return ""; }
 
 #else
 //----- 
+bool CTransactionBase::CheckOutputsAreStandard(int nHeight, std::string& reason) const
+{
+    unsigned int nDataOut = 0;
+    txnouttype whichType;
+
+    BOOST_FOREACH(const CTxOut& txout, vout)
+    {
+        CheckBlockResult checkBlockResult;
+        if (!::IsStandard(txout.scriptPubKey, whichType, checkBlockResult))
+        {
+            reason = "scriptpubkey";
+            return false;
+        }
+
+        if (checkBlockResult.referencedHeight > 0)
+        {
+            if ( (nHeight - checkBlockResult.referencedHeight) < ::getCheckBlockAtHeightMinAge())
+            {
+                LogPrintf("%s():%d - referenced block h[%d], chain.h[%d], minAge[%d]\n",
+                    __func__, __LINE__, checkBlockResult.referencedHeight, nHeight, ::getCheckBlockAtHeightMinAge() );
+                reason = "scriptpubkey checkblockatheight: referenced block too recent";
+                return false;
+            }
+        }
+
+        // provide temporary replay protection for two minerconf windows during chainsplit
+        if ((!IsCoinBase()) && (!ForkManager::getInstance().isTransactionTypeAllowedAtHeight(chainActive.Height(), whichType))) {
+            reason = "op-checkblockatheight-needed";
+            return false;
+        }
+
+        if (whichType == TX_NULL_DATA || whichType == TX_NULL_DATA_REPLAY)
+            nDataOut++;
+        else if ((whichType == TX_MULTISIG) && (!fIsBareMultisigStd)) {
+            reason = "bare-multisig";
+            return false;
+        } else if (txout.IsDust(::minRelayTxFee)) {
+            if (Params().NetworkIDString() == "regtest")
+            {
+                // do not reject this tx in regtest, there are py tests intentionally using zero values
+                // and expecting this to be processable
+                LogPrintf("%s():%d - txout is dust, ignoring it because we are in regtest\n",
+                    __func__, __LINE__);
+            }
+            else
+            {
+                reason = "dust";
+                return false;
+            }
+        }
+    }
+
+    // only one OP_RETURN txout is permitted
+    if (nDataOut > 1) {
+        reason = "multi-op-return";
+        return false;
+    }
+
+    return true;
+}
+
+bool CTransactionBase::CheckOutputsCheckBlockAtHeightOpCode(CValidationState& state) const
+{
+    // Check for vout's without OP_CHECKBLOCKATHEIGHT opcode
+    BOOST_FOREACH(const CTxOut& txout, vout)
+    {
+        txnouttype whichType;
+        ::IsStandard(txout.scriptPubKey, whichType);
+
+        // provide temporary replay protection for two minerconf windows during chainsplit
+        if ((!IsCoinBase()) && (!ForkManager::getInstance().isTransactionTypeAllowedAtHeight(chainActive.Height(),whichType)))
+        {
+            return state.DoS(0, error("%s: %s: %s is not activated at this block height %d. Transaction rejected. Tx id: %s", __FILE__, __func__, ::GetTxnOutputType(whichType), chainActive.Height(), GetHash().ToString()),
+                REJECT_CHECKBLOCKATHEIGHT_NOT_FOUND, "op-checkblockatheight-needed");
+        }
+    }
+    return true;
+}
+
 void CTransaction::AddToBlock(CBlock* pblock) const 
 {
     LogPrint("cert", "%s():%d - adding to block tx %s\n", __func__, __LINE__, GetHash().ToString());

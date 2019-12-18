@@ -57,30 +57,43 @@ bool CWalletDB::ErasePurpose(const string& strPurpose)
 
 #if 0
 bool CWalletDB::WriteTx(uint256 hash, const CWalletTx& wtx)
+{
+    nWalletDBUpdated++;
+    return Write(std::make_pair(std::string("tx"), hash), wtx);
+}
 #else
 bool CWalletDB::WriteTx(uint256 hash, const CWalletObjBase& obj)
-#endif
 {
-    // TODO handle with a virtual in parent class?
-    const CWalletTx* p = dynamic_cast<const CWalletTx*>(&obj);
-    if (p != 0)
+    // TODO handle cert and tx with a virtual in parent class?
+    const CWalletTx* t = dynamic_cast<const CWalletTx*>(&obj);
+    if (t != 0)
     {
         nWalletDBUpdated++;
-        return Write(std::make_pair(std::string("tx"), hash), *p);
+        return Write(std::make_pair(std::string("tx"), hash), *t);
     }
-    else
+    const CWalletCert* c = dynamic_cast<const CWalletCert*>(&obj);
+    if (c != 0)
     {
-        //TODO handle certificates
-        LogPrintf("%s():%d - ERROR: certificates still to be handled!!! ...returning true anyway\n", __func__, __LINE__);
-        return true;
+        LogPrint("cert", "%s():%d - writing cert[%s]]\n", __func__, __LINE__, hash.ToString());
+        return Write(std::make_pair(std::string("cert"), hash), *c);
     }
+    assert(false);
 }
+#endif
 
 bool CWalletDB::EraseTx(uint256 hash)
 {
     // TODO handle cetificates
     nWalletDBUpdated++;
+#if 0
     return Erase(std::make_pair(std::string("tx"), hash));
+#else
+    // Erase returns: (ok || not_found)
+    // in this way we can lump tx/cert together
+    return (
+        Erase(std::make_pair(std::string("tx"), hash)) &&
+        Erase(std::make_pair(std::string("cert"), hash)) );
+#endif
 }
 
 bool CWalletDB::WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, const CKeyMetadata& keyMeta)
@@ -492,6 +505,31 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             pwallet->AddToWallet(wtx, true, NULL);
         }
+#if 1
+        else if (strType == "cert")
+        {
+            uint256 hash;
+            ssKey >> hash;
+            CWalletCert wcert;
+            ssValue >> wcert;
+            CValidationState state;
+            auto verifier = libzcash::ProofVerifier::Strict();
+            if (!(wcert.Check(state, verifier) && (wcert.GetHash() == hash) && state.IsValid()))
+            {
+                LogPrint("cert", "%s():%d - cert[%s] is invalid\n", __func__, __LINE__, wcert.GetHash().ToString());
+                return false;
+            }
+
+            if (wcert.nOrderPos == -1)
+            {
+                LogPrint("cert", "%s():%d - cert[%s] is unordered\n", __func__, __LINE__, wcert.GetHash().ToString());
+                wss.fAnyUnordered = true;
+            }
+
+            LogPrint("cert", "%s():%d - adding cert[%s] to wallet\n", __func__, __LINE__, wcert.GetHash().ToString());
+            pwallet->AddToWallet(wcert, true, NULL);
+        }
+#endif
         else if (strType == "acentry")
         {
             string strAccount;
@@ -816,6 +854,14 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
                     if (strType == "tx")
                         // Rescan if there is a bad transaction record:
                         SoftSetBoolArg("-rescan", true);
+#if 1
+                    if (strType == "cert")
+                    {
+                        LogPrint("cert", "%s():%d - cert error: rescan set to true\n", __func__, __LINE__);
+                        // Rescan if there is a bad transaction record:
+                        SoftSetBoolArg("-rescan", true);
+                    }
+#endif
                 }
             }
             if (!strErr.empty())

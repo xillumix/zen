@@ -137,24 +137,32 @@ UniValue getnewaddress(const UniValue& params, bool fHelp)
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
-    if (fHelp || params.size() > 1)
+    if (fHelp || params.size() > 2)
         throw runtime_error(
-            "getnewaddress ( \"account\" )\n"
+            "getnewaddress ( \"account\" , (retpubkeyhash))\n"
             "\nReturns a new Horizen address for receiving payments.\n"
             "\nArguments:\n"
             "1. \"account\"        (string, optional) DEPRECATED. If provided, it MUST be set to the empty string \"\" to represent the default account. Passing any other string will result in an error.\n"
-            "\nResult:\n"
-            "\"horizenaddress\"    (string) The new Horizen address\n"
+            "2. retpubkeyhash    (boolean, optional) If provided the command will output the public key hash corresponding to the address.\n"
+            "\nResult, one of these:\n"
+            "\"horizenaddress\"    (string) The new Horizen address (default)\n"
+            "\"public key hash\"   (string) If retpubkeyhash==true, the public key hash (20 Bytes) corresponding to a new Horizen address (not shown)\n"
             "\nExamples:\n"
             + HelpExampleCli("getnewaddress", "")
+            + HelpExampleCli("getnewaddress \"\"", "true")
             + HelpExampleRpc("getnewaddress", "")
         );
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
+    bool retPkh = false;
+
     if (params.size() > 0)
         strAccount = AccountFromValue(params[0]);
+
+    if (params.size() == 2 )
+        retPkh = params[1].get_bool();
 
     if (!pwalletMain->IsLocked())
         pwalletMain->TopUpKeyPool();
@@ -167,7 +175,18 @@ UniValue getnewaddress(const UniValue& params, bool fHelp)
 
     pwalletMain->SetAddressBook(keyID, strAccount, "receive");
 
-    return CBitcoinAddress(keyID).ToString();
+    std::string ret;
+    if (retPkh)
+    {
+        // return the public key hash string
+        ret = keyID.ToString();
+    }
+    else
+    {
+        // return the taddr string
+        ret = CBitcoinAddress(keyID).ToString();
+    }
+    return ret;
 }
 
 
@@ -4137,7 +4156,7 @@ UniValue sc_bwdtr(const UniValue& params, bool fHelp)
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // side chain id
-    string inputString = params[0].get_str();
+    const string& inputString = params[0].get_str();
     if (inputString.find_first_not_of("0123456789abcdefABCDEF", 0) != std::string::npos)
         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid scid format: not an hex");
 
@@ -4151,7 +4170,7 @@ UniValue sc_bwdtr(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, string("scid not exists: ") + scId.ToString());
     }
 
-    UniValue outputs = params[1].get_array();
+    const UniValue& outputs = params[1].get_array();
 
     if (outputs.size()==0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, output array is empty.");
@@ -4168,17 +4187,27 @@ UniValue sc_bwdtr(const UniValue& params, bool fHelp)
         // sanity check, report error if unknown key-value pairs
         for (const string& s : o.getKeys())
         {
-            if (s != "address" && s != "amount")
+            if (s != "amount" && s != "pubkeyhash")
                 throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown key: ") + s);
         }
 
-        string address = find_value(o, "address").get_str();
-        CBitcoinAddress taddr(address);
+        const string& pkeyStr = find_value(o, "pubkeyhash").get_str();
+        if (pkeyStr.find_first_not_of("0123456789abcdefABCDEF", 0) != std::string::npos)
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid pkey format: not an hex");
+        if (pkeyStr.length() != 40)
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid pkey format: len is not 20 bytes ");
+
+        uint160 pkeyValue;
+        pkeyValue.SetHex(pkeyStr);
+
+        CKeyID keyID(pkeyValue);
+        CBitcoinAddress taddr(keyID);
+
         if (!taddr.IsValid()) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ")+address );
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, pubkeyhash does not give a valid address");
         }
 
-        UniValue av = find_value(o, "amount");
+        const UniValue& av = find_value(o, "amount");
         CAmount nAmount = AmountFromValue( av );
         if (nAmount <= 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, amount must be positive");
@@ -4192,6 +4221,14 @@ UniValue sc_bwdtr(const UniValue& params, bool fHelp)
         nTotalOut += nAmount;
     }
 
+    CAmount curBalance = ScMgr::instance().getSidechainBalance(scId);
+    if (nTotalOut > curBalance)
+    {
+        LogPrint("sc", "%s():%d - insufficent balance in scid[%s]: balance[%s], cert amount[%s]\n",
+            __func__, __LINE__, scId.ToString(), FormatMoney(curBalance), FormatMoney(nTotalOut) );
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "sidechain has insufficient funds");
+    }
+
     EnsureWalletIsUnlocked();
 
     std::string strFailReason;
@@ -4199,22 +4236,9 @@ UniValue sc_bwdtr(const UniValue& params, bool fHelp)
     CMutableScCertificate cert;
     // cert data
     cert.totalAmount = nTotalOut;
-    cert.nVersion = SC_TX_VERSION;
+    cert.nVersion = CScCertificate::SC_CERT_VERSION;
     cert.scId = scId;
     cert.nonce = uint256(GetRandHash() );
-
-#if 0
-// no vin in certificatres, think differently
-    // Fill vin with sort of coinbase
-    cert.vin.resize(1);
-    cert.vin[0].prevout.SetNull();
-    // in order to avoid potential non-unique tx hash, add a nonce
-    uint256 h(GetRandHash() );
-    cert.vin[0].scriptSig = CScript() << chainActive.Height() << ToByteVector(h) << OP_0;        
-#endif
-    
-    // vout - TODO fee will be carved out from amounts
-    unsigned int nSubtractFeeFromAmount = vecSend.size();
 
     BOOST_FOREACH (const auto& ccRecipient, vecSend)
     {
@@ -4225,20 +4249,22 @@ UniValue sc_bwdtr(const UniValue& params, bool fHelp)
         }
     }
 
-    // deduce fee (TODO see how it works for tx in wallet.cpp)
+    // deduce fee as for tx
     unsigned int nBytes = ::GetSerializeSize(cert, SER_NETWORK, PROTOCOL_VERSION);
     CAmount nFeeRet = CWallet::GetMinimumFee(nBytes, DEFAULT_TX_CONFIRM_TARGET, mempool);
     LogPrint("cert", "%s():%d - fee=%s\n", __func__, __LINE__, FormatMoney(nFeeRet));
+
+    const unsigned int numbOfReceivers = vecSend.size();
     bool fFirst = true;
 
     BOOST_FOREACH (auto& out, cert.vout)
     {
-        out.nValue -= nFeeRet / nSubtractFeeFromAmount; // Subtract fee equally from each selected recipient
+        out.nValue -= nFeeRet / numbOfReceivers; // Subtract fee equally from each selected recipient
  
         if (fFirst) // first receiver pays the remainder not divisible by output count
         {
             fFirst = false;
-            out.nValue -= nFeeRet % nSubtractFeeFromAmount;
+            out.nValue -= nFeeRet % numbOfReceivers;
         }
  
         if (out.IsDust(::minRelayTxFee))
@@ -4246,20 +4272,25 @@ UniValue sc_bwdtr(const UniValue& params, bool fHelp)
             if (nFeeRet > 0)
             {
                 if (out.nValue < 0)
+                {
                     strFailReason = _("The transaction amount is too small to pay the fee");
+                }
                 else
+                {
                     strFailReason = _("The transaction amount is too small to send after the fee has been deducted");
+                }
             }
             else
             {
                 strFailReason = _("Transaction amount too small");
             }
-            return false;
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strFailReason );
         }
     }
 
     CScCertificate constCert(cert);
-    constCert.GetHash();
+    const uint256& hash = constCert.GetHash();
+    LogPrint("cert", "%s():%d - cert=%s ready to be encoded\n", __func__, __LINE__, hash.ToString() );
 
     std::string encStr = EncodeHexCert(constCert);
     UniValue inputVal = UniValue(UniValue::VARR);

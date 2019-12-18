@@ -11,6 +11,7 @@
 
 extern CChain chainActive;
 extern UniValue ValueFromAmount(const CAmount& amount);
+extern CFeeRate minRelayTxFee;
 
 static const char DB_SC_INFO = 'i';
 
@@ -180,6 +181,26 @@ bool ScMgr::IsTxApplicableToState(const CTransaction& tx)
     return true;
 }
 
+bool ScMgr::IsCertApplicableToState(const CScCertificate& cert)
+{
+    if (!sidechainExists(cert.scId) )
+    {
+        LogPrint("sc", "%s():%d - cert[%s] refers to scId[%s] not yet created\n",
+            __func__, __LINE__, cert.GetHash().ToString(), cert.scId.ToString() );
+        return false;
+    }
+
+    CAmount curBalance = getSidechainBalance(cert.scId);
+    if (cert.totalAmount > curBalance)
+    {
+        LogPrint("sc", "%s():%d - insufficent balance in scid[%s]: balance[%s], cert amount[%s]\n",
+            __func__, __LINE__, cert.scId.ToString(), FormatMoney(curBalance), FormatMoney(cert.totalAmount) );
+        return false;
+    }
+
+    return true;
+}
+
 bool ScMgr::hasSidechainCreationOutput(const CTransaction& tx, const uint256& scId)
 {
     BOOST_FOREACH(const auto& sc, tx.vsc_ccout)
@@ -233,6 +254,29 @@ bool ScMgr::checkTxSemanticValidity(const CTransaction& tx, CValidationState& st
                 __func__), REJECT_INVALID, "sidechain-creation-missing-fwd-transfer");
         }
     }
+
+    return true;
+}
+
+bool ScMgr::checkCertSemanticValidity(const CScCertificate& cert, CValidationState& state)
+{
+    if (cert.nVersion != CScCertificate::SC_CERT_VERSION)
+    {
+        return state.DoS(100, error("version too low"), REJECT_INVALID, "bad-cert-version-too-low");
+    }
+
+    CAmount minimumFee = ::minRelayTxFee.GetFee(cert.CalculateSize());
+    CAmount fee = cert.totalAmount - cert.GetValueOut();
+
+    if ( fee < minimumFee)
+    {
+        LogPrint("sc", "%s():%d - Invalid cert[%s] : fee %s is less than minimum: %s\n",
+            __func__, __LINE__, cert.GetHash().ToString(), FormatMoney(fee), FormatMoney(minimumFee) );
+
+        return state.DoS(100, error("invalid amount or fee"), REJECT_INVALID, "bad-cert-amount-or-fee");
+    }
+
+    // TODO add check on vbt_ccout
 
     return true;
 }

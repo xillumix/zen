@@ -1557,6 +1557,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         // needed to restore wallet transaction meta data after -zapwallettxes
         std::vector<CWalletTx> vWtx;
 
+        // TODO handle also cert
         if (GetBoolArg("-zapwallettxes", false)) {
             uiInterface.InitMessage(_("Zapping all transactions from wallet..."));
 

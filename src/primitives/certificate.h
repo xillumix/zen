@@ -13,7 +13,7 @@ class CScCertificate : virtual public CTransactionBase
     void UpdateHash() const override;
 
 public:
-    static const int32_t MIN_OLD_CERT_VERSION = 1;
+    static const int32_t SC_CERT_VERSION = SC_TX_VERSION;
 
     const uint256 scId;
     const CAmount totalAmount;
@@ -22,7 +22,6 @@ public:
     const uint256 nonce;
 
     /** Construct a CScCertificate that qualifies as IsNull() */
-    ~CScCertificate() {};
     CScCertificate();
 
     /** Convert a CMutableScCertificate into a CScCertificate.  */
@@ -30,6 +29,18 @@ public:
 
     CScCertificate& operator=(const CScCertificate& tx);
     CScCertificate(const CScCertificate& tx);
+
+    friend bool operator==(const CScCertificate& a, const CScCertificate& b)
+    {
+        return a.hash == b.hash;
+    }
+
+    friend bool operator!=(const CScCertificate& a, const CScCertificate& b)
+    {
+        return a.hash != b.hash;
+    }
+
+    const uint256& GetHash() const { return hash; }
 
     ADD_SERIALIZE_METHODS;
 
@@ -48,7 +59,7 @@ public:
     template <typename Stream>
     CScCertificate(deserialize_type, Stream& s) : CScCertificate(CMutableScCertificate(deserialize, s)) {}
 
-    bool IsNull() const {
+    bool IsNull() const override {
         return (
             scId == uint256() &&
             totalAmount == 0 &&
@@ -57,56 +68,33 @@ public:
             nonce == uint256() );
     }
 
-    const uint256& GetHash() const {
-        return hash;
-    }
-
-    CAmount GetValueBackwardTransferCcOut() const;
-    CAmount GetValueOut() const;
-    CAmount GetValueIn(const CCoinsViewCache& view) const { return 0; } 
-    CAmount GetFeeAmount(CAmount valueIn) const;
-
-    bool IsCoinBase() const override { return false; }
-    bool IsCoinCertified() const override { return true; }
-
-    friend bool operator==(const CScCertificate& a, const CScCertificate& b)
-    {
-        return a.hash == b.hash;
-    }
-
-    friend bool operator!=(const CScCertificate& a, const CScCertificate& b)
-    {
-        return a.hash != b.hash;
-    }
+    CAmount GetValueOut() const override;
+    CAmount GetFeeAmount(CAmount valueIn) const override;
 
     unsigned int CalculateSize() const override;
     unsigned int CalculateModifiedSize(unsigned int /* unused nTxSize*/) const override;
-    std::string EncodeHex() const override;
 
+    std::string EncodeHex() const override;
     std::string ToString() const override;
 
-    void AddToBlock(CBlock* pblock) const; 
-    void AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int /* not used sigops */) const;
+    void AddToBlock(CBlock* pblock) const override; 
+    void AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int /* not used sigops */) const override;
 
-    bool Check(CValidationState& state, libzcash::ProofVerifier& verifier) const { return true; /*TODO*/ }
-    bool ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const { return true; /*TODO*/ }
-    bool IsStandard(std::string& reason, int nHeight) const { return true; /*TODO*/ }
-    bool CheckFinal(int flags) const { return true; /*TODO*/}
-    bool IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const  { return true; /*TODO*/}
-    bool HasNoInputsInMempool(const CTxMemPool& pool) const { return true; }
-    bool IsApplicableToState() const  { return true; /*TODO*/}
-    bool ContextualCheckInputs(CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
-          const CChain& chain, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams,
-          std::vector<CScriptCheck> *pvChecks = NULL) const { return true; /* TODO */}
+    bool Check(CValidationState& state, libzcash::ProofVerifier& verifier) const override;
+    bool ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const override;
+    bool CheckFinal(int flags) const override;
+    bool IsApplicableToState() const override;
 
-    void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const;
-    void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const;
-    void SyncWithWallets(const CBlock* pblock = NULL) const;
+    bool IsStandard(std::string& reason, int nHeight) const override;
+    bool IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const override;
+    
+    void SyncWithWallets(const CBlock* pblock = NULL) const override;
+    void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const override;
+    void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const override;
 
-    // certificates does not have inputs, therefore is ok to return true
-    bool CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const { return true; }
-    // as shielded txes do
-    double GetPriority(const CCoinsViewCache &view, int nHeight) const { return MAX_PRIORITY; }
+    double GetPriority(const CCoinsViewCache &view, int nHeight) const override;
+
+    bool IsCoinCertified() const override { return true; }
 };
 
 /** A mutable version of CScCertificate. */

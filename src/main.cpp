@@ -746,6 +746,7 @@ bool IsStandardTx(const CTransaction& tx, string& reason, const int nHeight)
         }
     }
 
+#if 0
     unsigned int nDataOut = 0;
     txnouttype whichType;
     BOOST_FOREACH(const CTxOut& txout, tx.vout) {
@@ -799,6 +800,13 @@ bool IsStandardTx(const CTransaction& tx, string& reason, const int nHeight)
         reason = "multi-op-return";
         return false;
     }
+
+#else
+    if (!tx.CheckOutputsAreStandard(nHeight, reason))
+    {
+        return false;
+    }
+#endif
 
     return true;
 }
@@ -1043,6 +1051,7 @@ bool CheckTransaction(const CTransaction& tx, CValidationState &state,
         }
     }
 
+#if 0
     // Check for vout's without OP_CHECKBLOCKATHEIGHT opcode
     BOOST_FOREACH(const CTxOut& txout, tx.vout)
     {
@@ -1055,6 +1064,12 @@ bool CheckTransaction(const CTransaction& tx, CValidationState &state,
                              REJECT_CHECKBLOCKATHEIGHT_NOT_FOUND, "op-checkblockatheight-needed");
         }
     }
+#else
+    if (!tx.CheckOutputsCheckBlockAtHeightOpCode(state) )
+    {
+        return false;
+    }
+#endif
 
     if (!Sidechain::ScMgr::checkTxSemanticValidity(tx, state) )
     {
@@ -1100,6 +1115,7 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
 
     // Check for negative or overflow output values
     CAmount nValueOut = 0;
+#if 0
     BOOST_FOREACH(const CTxOut& txout, tx.vout)
     {
         if (txout.nValue < 0)
@@ -1113,6 +1129,12 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
             return state.DoS(100, error("CheckTransaction(): txout total out of range"),
                              REJECT_INVALID, "bad-txns-txouttotal-toolarge");
     }
+#else
+    if (!tx.CheckVout(nValueOut, state))
+    {
+        return false;
+    }
+#endif
 
     // Ensure that joinsplit values are well-formed
     BOOST_FOREACH(const JSDescription& joinsplit, tx.vjoinsplit)
@@ -1402,13 +1424,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             return false;
         }
 #endif
-
     }
 
     {
         CCoinsView dummy;
         CCoinsViewCache view(&dummy);
-
         
         CAmount nValueIn = 0;
 

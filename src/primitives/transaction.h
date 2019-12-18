@@ -636,14 +636,12 @@ protected:
     /** Memory only. */
     const uint256 hash;
 
-    // this must be implemented by derived classes
     virtual void UpdateHash() const = 0;
 
 public:
     const int32_t nVersion;
     const std::vector<CTxOut> vout;
 
-    /** Construct a CTransactionBase that qualifies as IsNull() */
     CTransactionBase();
     CTransactionBase& operator=(const CTransactionBase& tx);
     CTransactionBase(const CTransactionBase& tx);
@@ -652,21 +650,9 @@ public:
     template <typename Stream>
     CTransactionBase(deserialize_type, Stream& s) : CTransactionBase(CMutableTransactionBase(deserialize, s)) {}
 
-    virtual bool IsNull() const = 0;
-
     const uint256& GetHash() const {
         return hash;
     }
-
-    // Return sum of txouts.
-    virtual CAmount GetValueOut() const = 0;
-    // return fee amount
-    virtual CAmount GetFeeAmount(CAmount valueIn) const = 0;
-
-    // return sum of txins, and needs CCoinsViewCache, because
-    // inputs must be known to compute value in.
-    virtual CAmount GetValueIn(const CCoinsViewCache& view) const = 0;
-
 
     friend bool operator==(const CTransactionBase& a, const CTransactionBase& b)
     {
@@ -678,58 +664,83 @@ public:
         return a.hash != b.hash;
     }
 
-    // Compute priority, given priority of inputs and (optionally) tx size
-    double ComputePriority(double dPriorityInputs, unsigned int nTxSize=0) const;
+    // Check for negative or overflow output values
+    bool CheckVout(CAmount& nValueOut, CValidationState &state) const;
+    bool CheckOutputsAreStandard(int nHeight, std::string& reason) const;
+    bool CheckOutputsCheckBlockAtHeightOpCode(CValidationState& state) const;
 
-    // return false when meaningful only in a block context. As of now only tx coin base returns false
-    virtual bool IsValidLoose() const { return true; }
+    //-----------------
+    // pure virtual interface 
+
+    virtual bool IsNull() const = 0;
+
+    // Return sum of txouts.
+    virtual CAmount GetValueOut() const = 0;
+    // return fee amount
+    virtual CAmount GetFeeAmount(CAmount valueIn) const = 0;
 
     // Compute tx size
     virtual unsigned int CalculateSize() const = 0;
-    virtual std::string EncodeHex() const = 0;
 
     // Compute modified tx size for priority calculation (optionally given tx size)
     virtual unsigned int CalculateModifiedSize(unsigned int nTxSize=0) const = 0;
 
+    virtual std::string EncodeHex() const = 0;
     virtual std::string ToString() const = 0;
 
     virtual void AddToBlock(CBlock* pblock) const = 0;
     virtual void AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int sigops) const = 0;
 
-    // default values for derived classes not supporting specific data structures
-    virtual bool IsCoinBase() const { return false; };
-    virtual bool IsCoinCertified() const { return false; }
-
-    // Return sum of JoinSplit vpub_new if supported
-    virtual CAmount GetJoinSplitValueIn() const { return 0; };
-    virtual bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const { return true; };
-    virtual void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const { return; };
-    virtual bool HaveInputs(const CCoinsViewCache& view) const { return true; };
-    virtual bool AreInputsStandard(CCoinsViewCache& view) const { return true; };
-    virtual unsigned int GetP2SHSigOpCount(CCoinsViewCache& view) const { return 0; }
-    virtual unsigned int GetLegacySigOpCount() const { return 0; }
-    virtual CAmount GetValueCcOut() const { return 0; };
-    virtual size_t getVjoinsplitSize() const { return 0; };
-    virtual const uint256 getJoinSplitPubKey() const { return uint256(); }
-    virtual int GetComplexity() const { return 0; }
-
-    virtual int GetNumbOfInputs() const { return 0; }
-    virtual bool CheckInputsLimit(size_t limit, size_t& n) const { return true; }
     virtual bool Check(CValidationState& state, libzcash::ProofVerifier& verifier) const = 0;
     virtual bool ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const = 0;
     virtual bool IsStandard(std::string& reason, int nHeight) const = 0;
     virtual bool CheckFinal(int flags = -1) const = 0;
     virtual bool IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const = 0;
-    virtual bool HasNoInputsInMempool(const CTxMemPool& pool) const = 0;
     virtual bool IsApplicableToState() const = 0;
-    virtual bool ContextualCheckInputs(CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
-       const CChain& chain, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams,
-       std::vector<CScriptCheck> *pvChecks = NULL) const = 0;
+
     virtual void SyncWithWallets(const CBlock* pblock = NULL) const = 0;
-    virtual bool CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const = 0;
-    virtual double GetPriority(const CCoinsViewCache &view, int nHeight) const = 0;
     virtual void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const = 0;
     virtual void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const = 0;
+
+    virtual double GetPriority(const CCoinsViewCache &view, int nHeight) const = 0;
+
+    //-----------------
+    // default values for derived classes which do not support specific data structures
+
+    // return false when meaningful only in a block context. As of now only tx coin base returns false
+    virtual bool IsValidLoose() const { return true; }
+
+    virtual bool IsCoinBase() const { return false; }
+    virtual bool IsCoinCertified() const { return false; }
+
+    // Return sum of JoinSplit vpub_new if supported
+    virtual CAmount GetJoinSplitValueIn() const { return 0; }
+
+    virtual bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const { return true; }
+    virtual void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const { return; }
+    virtual bool HaveInputs(const CCoinsViewCache& view) const { return true; }
+    virtual bool CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const { return true; };
+    virtual bool HasNoInputsInMempool(const CTxMemPool& pool) const { return true; }
+    virtual bool AreInputsStandard(CCoinsViewCache& view) const { return true; }
+
+    virtual bool ContextualCheckInputs(CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
+       const CChain& chain, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams,
+       std::vector<CScriptCheck> *pvChecks = NULL) const { return true; }
+
+    virtual unsigned int GetP2SHSigOpCount(CCoinsViewCache& view) const { return 0; }
+    virtual unsigned int GetLegacySigOpCount() const { return 0; }
+    virtual size_t getVjoinsplitSize() const { return 0; }
+    virtual const uint256 getJoinSplitPubKey() const { return uint256(); }
+    virtual int GetComplexity() const { return 0; }
+
+    // return sum of txins, and needs CCoinsViewCache, because
+    // inputs must be known to compute value in.
+    virtual CAmount GetValueIn(const CCoinsViewCache& view) const { return 0; }
+
+    virtual CAmount GetValueCcOut() const { return 0; }
+
+    virtual int GetNumbOfInputs() const { return 0; }
+    virtual bool CheckInputsLimit(size_t limit, size_t& n) const { return true; }
 };
 
 struct CMutableTransaction;
@@ -810,6 +821,9 @@ public:
         return (nVersion == SC_TX_VERSION);
     }
 
+    // Compute priority, given priority of inputs and (optionally) tx size
+    double ComputePriority(double dPriorityInputs, unsigned int nTxSize=0) const;
+
     bool IsValidLoose() const override;
     unsigned int CalculateSize() const override;
     unsigned int CalculateModifiedSize(unsigned int nTxSize) const override;
@@ -839,17 +853,17 @@ public:
     }
     
     // Return sum of txouts.
-    CAmount GetValueOut() const;
+    CAmount GetValueOut() const override;
     // Return sum of tx ins
-    CAmount GetValueIn(const CCoinsViewCache& view) const;
+    CAmount GetValueIn(const CCoinsViewCache& view) const override;
     // value in should be computed via the method above using a proper coin view
-    CAmount GetFeeAmount(CAmount valueIn) const { return (valueIn - GetValueOut() ); }
+    CAmount GetFeeAmount(CAmount valueIn) const override { return (valueIn - GetValueOut() ); }
 
     // Return sum of txccouts.
     CAmount GetValueCertifierLockCcOut() const;
     CAmount GetValueForwardTransferCcOut() const;
 
-    size_t getVjoinsplitSize() const { return vjoinsplit.size(); };
+    size_t getVjoinsplitSize() const { return vjoinsplit.size(); }
     int GetComplexity() const { return vin.size()*vin.size(); }
     const uint256 getJoinSplitPubKey() const { return joinSplitPubKey; }
 
@@ -921,9 +935,9 @@ public:
     }
 
   public:
-    void AddToBlock(CBlock* pblock) const;
-    void AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int sigops) const;
-    CAmount GetJoinSplitValueIn() const;
+    void AddToBlock(CBlock* pblock) const override;
+    void AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int sigops) const override;
+    CAmount GetJoinSplitValueIn() const override;
     int GetNumbOfInputs() const;
     bool CheckInputsLimit(size_t limit, size_t& n) const;
     bool Check(CValidationState& state, libzcash::ProofVerifier& verifier) const;
@@ -931,7 +945,7 @@ public:
     bool IsStandard(std::string& reason, int nHeight) const;
     bool CheckFinal(int flags = -1) const;
     bool IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const;
-    bool HasNoInputsInMempool(const CTxMemPool& pool) const;
+    bool HasNoInputsInMempool(const CTxMemPool& pool) const override;
     bool IsApplicableToState() const;
     bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const;
     void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const;
@@ -939,11 +953,11 @@ public:
     void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const;
     void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const;
     bool AreInputsStandard(CCoinsViewCache& view) const;
-    unsigned int GetP2SHSigOpCount(CCoinsViewCache& view) const;
-    unsigned int GetLegacySigOpCount() const;
     bool ContextualCheckInputs(CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
                            const CChain& chain, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams,
                            std::vector<CScriptCheck> *pvChecks = NULL) const;
+    unsigned int GetP2SHSigOpCount(CCoinsViewCache& view) const;
+    unsigned int GetLegacySigOpCount() const;
     void SyncWithWallets(const CBlock* pblock = NULL) const;
     bool CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const;
     double GetPriority(const CCoinsViewCache &view, int nHeight) const;

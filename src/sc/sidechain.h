@@ -88,8 +88,6 @@ class ScMgr
 
     bool updateSidechainBalance(const uint256& scId, const CAmount& amount);
 
-    CAmount getSidechainBalance(const uint256& scId);
-
   public:
 
     ScMgr(const ScMgr&) = delete;
@@ -108,10 +106,15 @@ class ScMgr
     bool onBlockDisconnected(const CBlock& block, int nHeight);
 
     bool IsTxAllowedInMempool(const CTxMemPool& pool, const CTransaction& tx, CValidationState& state);
+
     static bool checkTxSemanticValidity(const CTransaction& tx, CValidationState& state);
+    static bool checkCertSemanticValidity(const CScCertificate& cert, CValidationState& state);
     bool IsTxApplicableToState(const CTransaction& tx);
+    bool IsCertApplicableToState(const CScCertificate& cert);
 
     void getScIdSet(std::set<uint256>& sScIds) const;
+
+    CAmount getSidechainBalance(const uint256& scId);
 
     // print functions
     bool dump_info(const uint256& scId);
