@@ -120,7 +120,7 @@ public:
         libzcash::ProofVerifier& verifier,
         const uint256& joinSplitPubKey,
         const JSDescription& jsdesc
-        ) : params(params), jsdesc(jsdesc), verifier(verifier), joinSplitPubKey(joinSplitPubKey) {}
+        ) : params(params), verifier(verifier), joinSplitPubKey(joinSplitPubKey), jsdesc(jsdesc) {}
 
     bool operator()(const libzcash::PHGRProof& proof) const
     {

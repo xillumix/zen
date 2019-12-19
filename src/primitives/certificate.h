@@ -121,7 +121,7 @@ struct CMutableScCertificate : public CMutableTransactionBase
     }
 
     template <typename Stream>
-    CMutableScCertificate(deserialize_type, Stream& s) {
+    CMutableScCertificate(deserialize_type, Stream& s) : totalAmount(0) {
         Unserialize(s);
     }
 

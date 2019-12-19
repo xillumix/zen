@@ -290,7 +290,6 @@ UniValue mempoolToJSON(bool fVerbose = false)
             info.push_back(Pair("height", (int)e.GetHeight()));
             info.push_back(Pair("startingpriority", e.GetPriority(e.GetHeight())));
             info.push_back(Pair("currentpriority", e.GetPriority(chainActive.Height())));
-            const CScCertificate& cert = e.GetCertificate();
             o.push_back(Pair(hash.ToString(), info));
         }
         BOOST_FOREACH(const auto& entry, mempool.mapDeltas)

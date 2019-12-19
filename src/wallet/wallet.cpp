@@ -1937,9 +1937,9 @@ int CWalletTx::GetRequestCount() const
                 // How about the block it's in?
                 if (nRequests == 0 && !hashBlock.IsNull())
                 {
-                    map<uint256, int>::const_iterator mi = pwallet->mapRequestCount.find(hashBlock);
-                    if (mi != pwallet->mapRequestCount.end())
-                        nRequests = (*mi).second;
+                    map<uint256, int>::const_iterator ki = pwallet->mapRequestCount.find(hashBlock);
+                    if (ki != pwallet->mapRequestCount.end())
+                        nRequests = (*ki).second;
                     else
                         nRequests = 1; // If it's in someone else's block it must have got out
                 }
@@ -4709,9 +4709,6 @@ void CWalletCert::GetAmounts(std::list<COutputEntry>& listReceived, std::list<CO
     listSent.clear();
     listScSent.clear();
     strSentAccount = strFromAccount;
-
-    bool isFromMyTaddr = false;
-    bool isFromMyZaddr = false;
 
     // Sent/received.
     for (unsigned int i = 0; i < vout.size(); ++i)

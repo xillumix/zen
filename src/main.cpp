@@ -6964,8 +6964,6 @@ bool RelayAlternativeChain(CValidationState &state, CBlock *pblock, BlockSet* sF
     // 4. Starting from this block, look for the best height that has a complete chain of ancestors
     // --
     // This is done for all of possible forks stem after starting block, potentially more than one height could be found.
-    bool found = false;
-    unsigned int count = 0;
 
     //dump_global_tips();
 

@@ -4208,7 +4208,7 @@ UniValue sc_bwdtr(const UniValue& params, bool fHelp)
         }
 
         const UniValue& av = find_value(o, "amount");
-        CAmount nAmount = AmountFromValue( av );
+        CAmount nAmount = AmountFromValue(av);
         if (nAmount <= 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, amount must be positive");
 
@@ -4292,10 +4292,10 @@ UniValue sc_bwdtr(const UniValue& params, bool fHelp)
     const uint256& hash = constCert.GetHash();
     LogPrint("cert", "%s():%d - cert=%s ready to be encoded\n", __func__, __LINE__, hash.ToString() );
 
-    std::string encStr = EncodeHexCert(constCert);
-    UniValue inputVal = UniValue(UniValue::VARR);
+    const std::string& encStr = EncodeHexCert(constCert);
+    UniValue inputVal(UniValue::VARR);
     inputVal.push_back(encStr);
-    UniValue sendResultValue = sendrawcertificate(inputVal, false);
+    const UniValue& sendResultValue = sendrawcertificate(inputVal, false);
     if (sendResultValue.isNull()) {
         throw JSONRPCError(RPC_WALLET_ERROR, "sendrawcertificate did not return an error or a certificate id.");
     }

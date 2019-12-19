@@ -792,9 +792,9 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
     return true;
 }
 
-static bool IsKeyType(string strType)
+static bool IsKeyType(const string& strType)
 {
-    return (strType== "key" || strType == "wkey" ||
+    return (strType == "key"  || strType == "wkey" ||
             strType == "zkey" || strType == "czkey" ||
             strType == "vkey" ||
             strType == "mkey" || strType == "ckey");
@@ -1041,8 +1041,8 @@ void ThreadFlushWalletDB(const string& strFile)
                 if (nRefCount == 0)
                 {
                     boost::this_thread::interruption_point();
-                    map<string, int>::iterator mi = bitdb.mapFileUseCount.find(strFile);
-                    if (mi != bitdb.mapFileUseCount.end())
+                    map<string, int>::iterator ki = bitdb.mapFileUseCount.find(strFile);
+                    if (ki != bitdb.mapFileUseCount.end())
                     {
                         LogPrint("db", "Flushing wallet.dat\n");
                         nLastFlushed = nWalletDBUpdated;
@@ -1052,7 +1052,7 @@ void ThreadFlushWalletDB(const string& strFile)
                         bitdb.CloseDb(strFile);
                         bitdb.CheckpointLSN(strFile);
 
-                        bitdb.mapFileUseCount.erase(mi++);
+                        bitdb.mapFileUseCount.erase(ki++);
                         LogPrint("db", "Flushed wallet.dat %dms\n", GetTimeMillis() - nStart);
                     }
                 }

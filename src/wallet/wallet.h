@@ -487,9 +487,30 @@ public:
         MerkleAbstractBase::operator=(o);
         return *this;
     }
+
     CWalletObjBase& operator=(CWalletObjBase&& wob)
     {
         pwallet = wob.pwallet;
+
+        fDebitCached                 = wob.fDebitCached;
+        fCreditCached                = wob.fCreditCached;
+        fImmatureCreditCached        = wob.fImmatureCreditCached;
+        fAvailableCreditCached       = wob.fAvailableCreditCached;
+        fWatchDebitCached            = wob.fWatchDebitCached;
+        fWatchCreditCached           = wob.fWatchCreditCached;
+        fImmatureWatchCreditCached   = wob.fImmatureWatchCreditCached;
+        fAvailableWatchCreditCached  = wob.fAvailableWatchCreditCached;
+        fChangeCached                = wob.fChangeCached;
+        nDebitCached                 = wob.nDebitCached;
+        nCreditCached                = wob.nCreditCached;
+        nImmatureCreditCached        = wob.nImmatureCreditCached;
+        nAvailableCreditCached       = wob.nAvailableCreditCached;
+        nWatchDebitCached            = wob.nWatchDebitCached;
+        nWatchCreditCached           = wob.nWatchCreditCached;
+        nImmatureWatchCreditCached   = wob.nImmatureWatchCreditCached;
+        nAvailableWatchCreditCached  = wob.nAvailableWatchCreditCached;
+        nChangeCached                = wob.nChangeCached;
+
         return *this;
     }
 #else

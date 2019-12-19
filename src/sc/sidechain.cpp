@@ -147,10 +147,9 @@ bool ScMgr::IsTxApplicableToState(const CTransaction& tx)
             }
 
             // this tx is the owner, go on without error. Can happen in check level 4 performed at
-            // startup in VerifyDB 
+            // startup in VerifyDB
             LogPrint("sc", "%s():%d - OK tx[%s] : scid[%s] creation detected\n",
                 __func__, __LINE__, txHash.ToString(), sc.scId.ToString() );
-
         }
         else
         {
@@ -221,7 +220,7 @@ bool ScMgr::checkTxSemanticValidity(const CTransaction& tx, CValidationState& st
         if (!tx.ccIsNull() )
         {
             return state.DoS(100,
-                error("mismatch between transaction version and sidechain output presence"), 
+                error("mismatch between transaction version and sidechain output presence"),
                 REJECT_INVALID, "sidechain-tx-version");
         }
 
@@ -234,7 +233,7 @@ bool ScMgr::checkTxSemanticValidity(const CTransaction& tx, CValidationState& st
         if (tx.vjoinsplit.size() > 0)
         {
             return state.DoS(100,
-                error("mismatch between transaction version and joinsplit presence"), 
+                error("mismatch between transaction version and joinsplit presence"),
                 REJECT_INVALID, "sidechain-tx-version");
         }
     }
@@ -386,7 +385,6 @@ bool ScMgr::onBlockDisconnected(const CBlock& block, int nHeight)
             const uint256& txHash = tx.GetHash();
 
             LogPrint("sc", "%s():%d - tx=%s\n", __func__, __LINE__, txHash.ToString() );
-            int c = 0;
 
             BOOST_FOREACH(auto& ft, tx.vft_ccout)
             {
@@ -412,17 +410,17 @@ bool ScMgr::onBlockDisconnected(const CBlock& block, int nHeight)
             // remove sc creation, check that their balance is 0
             BOOST_FOREACH(auto& sc, tx.vsc_ccout)
             {
-                ScInfo info; 
+                ScInfo info;
                 if (!getScInfo(sc.scId, info) )
                 {
-                    // should not happen 
+                    // should not happen
                     LogPrint("sc", "ERROR: %s():%d - CR: scId=%s not in map\n", __func__, __LINE__, sc.scId.ToString() );
                     return false;
                 }
 
                 if (info.balance > 0)
                 {
-                    // should not happen either 
+                    // should not happen either
                     LogPrint("sc", "ERROR %s():%d - scId=%s balance not null: %s\n",
                         __func__, __LINE__, sc.scId.ToString(), FormatMoney(info.balance));
                     return false;
@@ -504,14 +502,14 @@ bool ScMgr::initialUpdateFromDb(size_t cacheSize, bool fWipe)
             uint256 keyScId;
             ssKey >> chType;
             ssKey >> keyScId;;
- 
+
             if (chType == DB_SC_INFO)
             {
                 leveldb::Slice slValue = it->value();
                 CDataStream ssValue(slValue.data(), slValue.data()+slValue.size(), SER_DISK, CLIENT_VERSION);
                 ScInfo info;
                 ssValue >> info;
- 
+
                 mScInfo[keyScId] = info;
                 LogPrint("sc", "%s():%d - scId[%s] added in map\n", __func__, __LINE__, keyScId.ToString() );
             }

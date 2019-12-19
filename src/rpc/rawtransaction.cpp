@@ -1147,7 +1147,9 @@ UniValue sendrawcertificate(const UniValue& params, bool fHelp)
 
     bool fOverrideFees = false;
     if (params.size() > 1)
+    {
         fOverrideFees = params[1].get_bool();
+    }
 
     // check that we do not have it already somewhere
     CCoinsViewCache &view = *pcoinsTip;

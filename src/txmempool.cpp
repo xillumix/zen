@@ -25,7 +25,7 @@ CMemPoolEntry::CMemPoolEntry():
 }
 
 CMemPoolEntry::CMemPoolEntry(const CAmount& _nFee, int64_t _nTime, double _dPriority, unsigned int _nHeight) :
-    nFee(_nFee), nTime(_nTime), dPriority(_dPriority), nHeight(_nHeight)
+    nFee(_nFee), nModSize(0), nUsageSize(0), nTime(_nTime), dPriority(_dPriority), nHeight(_nHeight)
 {
 }
 
@@ -86,7 +86,7 @@ CCertificateMemPoolEntry::GetPriority(unsigned int currentHeight) const
 }
 
 CTxMemPool::CTxMemPool(const CFeeRate& _minRelayFee) :
-    nTransactionsUpdated(0)
+    nTransactionsUpdated(0), nCertificatesUpdated(0), cachedInnerUsage(0)
 {
     // Sanity checks off by default for performance, because otherwise
     // accepting transactions becomes O(N^2) where N is the number
@@ -155,7 +155,6 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CCertificateMemPoolEntr
     // TODO use a separate cs
     LOCK(cs);
     mapCertificate[hash] = entry;
-    const CScCertificate& cert = mapCertificate[hash].GetCertificate();
     nCertificatesUpdated++;
     totalCertificateSize += entry.GetCertificateSize();
     cachedInnerUsage += entry.DynamicMemoryUsage();
@@ -527,7 +526,6 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
 #if 1
     for (auto it = mapCertificate.begin(); it != mapCertificate.end(); it++)
     {
-        unsigned int i = 0;
         checkTotal += it->second.GetCertificateSize();
         innerUsage += it->second.DynamicMemoryUsage();
         const auto& cert = it->second.GetCertificate();
@@ -655,7 +653,7 @@ CTxMemPool::ReadFeeEstimates(CAutoFile& filein)
     return true;
 }
 
-void CTxMemPool::PrioritiseTransaction(const uint256 hash, const string strHash, double dPriorityDelta, const CAmount& nFeeDelta)
+void CTxMemPool::PrioritiseTransaction(const uint256& hash, const string& strHash, double dPriorityDelta, const CAmount& nFeeDelta)
 {
     {
         LOCK(cs);

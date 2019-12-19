@@ -512,8 +512,8 @@ public:
         READWRITE(scId);
     }
 
-    virtual uint256 GetHash() const;
-    virtual std::string ToString() const;
+    virtual uint256 GetHash() const override;
+    virtual std::string ToString() const override;
 
     friend bool operator==(const CTxForwardTransferOut& a, const CTxForwardTransferOut& b)
     {
@@ -603,8 +603,8 @@ public:
         activeFromWithdrawalEpoch = -1;
     }
 
-    virtual uint256 GetHash() const;
-    virtual std::string ToString() const;
+    virtual uint256 GetHash() const override;
+    virtual std::string ToString() const override;
 
     friend bool operator==(const CTxCertifierLockOut& a, const CTxCertifierLockOut& b)
     {
@@ -751,7 +751,7 @@ struct CMutableTransaction;
 class CTransaction : virtual public CTransactionBase
 {
 protected:
-    void UpdateHash() const;
+    void UpdateHash() const override;
 
 public:
     typedef boost::array<unsigned char, 64> joinsplit_sig_t;
@@ -830,12 +830,13 @@ public:
 
     std::string EncodeHex() const override;
 
-    bool IsCoinBase() const
+    bool IsCoinBase() const override
     {
         return (vin.size() == 1 && vin[0].prevout.IsNull());
     }
 
-    bool IsNull() const {
+    bool IsNull() const override
+    {
         bool ret = vin.empty() && vout.empty();
         if (IsScVersion() )
         {
@@ -863,11 +864,11 @@ public:
     CAmount GetValueCertifierLockCcOut() const;
     CAmount GetValueForwardTransferCcOut() const;
 
-    size_t getVjoinsplitSize() const { return vjoinsplit.size(); }
-    int GetComplexity() const { return vin.size()*vin.size(); }
-    const uint256 getJoinSplitPubKey() const { return joinSplitPubKey; }
+    size_t getVjoinsplitSize() const override { return vjoinsplit.size(); }
+    int GetComplexity() const override { return vin.size()*vin.size(); }
+    const uint256 getJoinSplitPubKey() const override { return joinSplitPubKey; }
 
-    std::string ToString() const;
+    std::string ToString() const override;
 
  public:
     void getCrosschainOutputs(std::map<uint256, std::vector<uint256> >& map) const;
@@ -938,29 +939,29 @@ public:
     void AddToBlock(CBlock* pblock) const override;
     void AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int sigops) const override;
     CAmount GetJoinSplitValueIn() const override;
-    int GetNumbOfInputs() const;
-    bool CheckInputsLimit(size_t limit, size_t& n) const;
-    bool Check(CValidationState& state, libzcash::ProofVerifier& verifier) const;
-    bool ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const;
-    bool IsStandard(std::string& reason, int nHeight) const;
-    bool CheckFinal(int flags = -1) const;
-    bool IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const;
+    int GetNumbOfInputs() const override;
+    bool CheckInputsLimit(size_t limit, size_t& n) const override;
+    bool Check(CValidationState& state, libzcash::ProofVerifier& verifier) const override;
+    bool ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const override;
+    bool IsStandard(std::string& reason, int nHeight) const override;
+    bool CheckFinal(int flags = -1) const override;
+    bool IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const override;
     bool HasNoInputsInMempool(const CTxMemPool& pool) const override;
-    bool IsApplicableToState() const;
-    bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const;
-    void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const;
-    bool HaveInputs(const CCoinsViewCache& view) const;
-    void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const;
-    void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const;
-    bool AreInputsStandard(CCoinsViewCache& view) const;
+    bool IsApplicableToState() const override;
+    bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const override;
+    void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const override;
+    bool HaveInputs(const CCoinsViewCache& view) const override;
+    void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const override;
+    void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const override;
+    bool AreInputsStandard(CCoinsViewCache& view) const override;
     bool ContextualCheckInputs(CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
                            const CChain& chain, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams,
-                           std::vector<CScriptCheck> *pvChecks = NULL) const;
-    unsigned int GetP2SHSigOpCount(CCoinsViewCache& view) const;
-    unsigned int GetLegacySigOpCount() const;
-    void SyncWithWallets(const CBlock* pblock = NULL) const;
-    bool CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const;
-    double GetPriority(const CCoinsViewCache &view, int nHeight) const;
+                           std::vector<CScriptCheck> *pvChecks = NULL) const override;
+    unsigned int GetP2SHSigOpCount(CCoinsViewCache& view) const override;
+    unsigned int GetLegacySigOpCount() const override;
+    void SyncWithWallets(const CBlock* pblock = NULL) const override;
+    bool CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const override;
+    double GetPriority(const CCoinsViewCache &view, int nHeight) const override;
 };
 
 /** A mutable hierarchy version of CTransaction. */
@@ -1020,14 +1021,14 @@ struct CMutableTransaction : public CMutableTransactionBase
     }
 
     template <typename Stream>
-    CMutableTransaction(deserialize_type, Stream& s) {
+    CMutableTransaction(deserialize_type, Stream& s):nLockTime(0) {
         Unserialize(s);
     }
 
     /** Compute the hash of this CMutableTransaction. This is computed on the
      * fly, as opposed to GetHash() in CTransaction, which uses a cached result.
      */
-    uint256 GetHash() const;
+    uint256 GetHash() const override;
 
     bool IsScVersion() const
     {
