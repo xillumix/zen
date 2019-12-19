@@ -112,15 +112,7 @@ void WalletTxToJSON(const CWalletObjBase& wtx, UniValue& entry, isminefilter fil
 #if 0
     entry.push_back(Pair("vjoinsplit", TxJoinSplitToJSON(wtx)));
 #else
-    // TODO add a virtual method to base class which calls this
-    const CTransaction* ptx = dynamic_cast<const CTransaction*>(&wtx);
-    if (!ptx)
-    {
-        // nothing to do
-        return;
-    }
-    const CTransaction& tx = *ptx;
-    entry.push_back(Pair("vjoinsplit", TxJoinSplitToJSON(tx)));
+    wtx.AddJoinSplitToJSON(entry);
 #endif
 }
 
@@ -3969,7 +3961,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
     size_t txsize = 0;
     CMutableTransaction mtx;
     mtx.nVersion = shieldedTxVersion;
-    for (int i = 0; i < zaddrRecipients.size(); i++) {
+    for (unsigned int i = 0; i < zaddrRecipients.size(); i++) {
         mtx.vjoinsplit.push_back(JSDescription::getNewInstance(mtx.nVersion == GROTH_TX_VERSION));
     }
     CTransaction tx(mtx);
@@ -4482,7 +4474,7 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp)
     auto destaddress = params[1].get_str();
     try {
         CZCPaymentAddress pa(destaddress);
-        libzcash::PaymentAddress zaddr = pa.Get();
+        /*libzcash::PaymentAddress zaddr =*/ pa.Get();
     } catch (const std::runtime_error&) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ") + destaddress );
     }

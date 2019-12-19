@@ -1480,6 +1480,7 @@ bool CWallet::UpdatedNoteData(const CWalletObjBase& wtxIn, CWalletObjBase& wtx)
  * pblock is optional, but should be provided if the transaction is known to be in a block.
  * If fUpdate is true, existing transactions will be updated.
  */
+#if 0
 bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate)
 {
     {
@@ -1509,15 +1510,6 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
     return false;
 }
 
-void CWallet::SyncTransaction(const CTransaction& tx, const CBlock* pblock)
-{
-    LOCK2(cs_main, cs_wallet);
-    if (!AddToWalletIfInvolvingMe(tx, pblock, true))
-        return; // Not one of ours
-
-    MarkAffectedTransactionsDirty(tx);
-}
-
 bool CWallet::AddToWalletIfInvolvingMe(const CScCertificate& cert, const CBlock* pblock, bool fUpdate)
 {
     LogPrint("cert", "%s():%d - called for cert[%s]\n", __func__, __LINE__, cert.GetHash().ToString());
@@ -1530,8 +1522,6 @@ bool CWallet::AddToWalletIfInvolvingMe(const CScCertificate& cert, const CBlock*
         }
         if (fExisted || IsMine(cert) )
         {
-            // TODO add certificates to the wallet
-#if 1
             CWalletCert wcert(this, cert);
 
             // Get merkle branch if transaction was found in a block
@@ -1543,10 +1533,67 @@ bool CWallet::AddToWalletIfInvolvingMe(const CScCertificate& cert, const CBlock*
             CWalletDB walletdb(strWalletFile, "r+", false);
 
             return AddToWallet(wcert, false, &walletdb);
-#endif
         }
     }
     return false;
+}
+#else
+bool CWallet::AddToWalletIfInvolvingMe(const CTransactionBase& obj, const CBlock* pblock, bool fUpdate)
+{
+    LogPrint("cert", "%s():%d - called for %s[%s]\n", __func__, __LINE__,
+        obj.IsCoinCertified()?"cert":"tx", obj.GetHash().ToString());
+
+    {
+        AssertLockHeld(cs_wallet);
+        bool fExisted = mapWallet.count(obj.GetHash()) != 0;
+        if (fExisted && !fUpdate)
+        {
+            return false;
+        }
+
+        mapNoteData_t noteData;
+        try
+        {
+            std::shared_ptr<CWalletObjBase> sobj = CWalletObjBase::MakeWalletObjectBase(obj, this);
+            bool isInvolvingMe = sobj->IsInvolvingMe(noteData);
+ 
+            if (fExisted || isInvolvingMe )
+            {
+                if (noteData.size() > 0) {
+                    sobj->SetNoteData(noteData);
+                }
+ 
+                // Get merkle branch if transaction was found in a block
+                if (pblock)
+                    sobj->SetMerkleBranch(*pblock);
+ 
+                // Do not flush the wallet here for performance reasons
+                // this is safe, as in case of a crash, we rescan the necessary blocks on startup through our SetBestChain-mechanism
+                CWalletDB walletdb(strWalletFile, "r+", false);
+ 
+                return AddToWallet(*sobj, false, &walletdb);
+            }
+        }
+        catch (const std::exception &exc)
+        {
+            LogPrintf("%s():%d - %s\n", __func__, __LINE__, exc.what());
+        }
+        catch(...)
+        {
+            LogPrintf("%s():%d - Unexpected exception caught\n", __func__, __LINE__);
+        }
+    }
+    return false;
+}
+#endif
+
+void CWallet::SyncTransaction(const CTransaction& tx, const CBlock* pblock)
+{
+    LOCK2(cs_main, cs_wallet);
+    if (!AddToWalletIfInvolvingMe(tx, pblock, true))
+        return; // Not one of ours
+
+    MarkAffectedTransactionsDirty(tx);
 }
 
 void CWallet::SyncCertificate(const CScCertificate& cert, const CBlock* pblock)
@@ -2301,6 +2348,19 @@ bool CWalletTx::RelayWalletTransaction()
     }
     return false;
 }
+
+bool CWalletTx::IsInvolvingMe(mapNoteData_t &noteData) const
+{
+    if (!pwallet)
+    {
+        LogPrintf("%s():%d - null wallet ptr\n", __func__, __LINE__);
+        return false;
+    }
+
+    noteData = pwallet->FindMyNotes(*this);
+    return (pwallet->IsMine(*this) || pwallet->IsFromMe(*this) || noteData.size() > 0);
+}
+
 
 set<uint256> CWalletTx::GetConflicts() const
 {
@@ -4319,6 +4379,22 @@ CWalletKey::CWalletKey(int64_t nExpires)
     nTimeExpires = nExpires;
 }
 
+int CMerkleTx::GetIndexInBlock(const CBlock& block)
+{
+#if 1
+    // Locate the index of certificate
+    for (nIndex = 0; nIndex < (int)block.vtx.size(); nIndex++)
+        if (block.vtx[nIndex] == *(CTransaction*)this)
+            break;
+
+    if (nIndex == (int)block.vtx.size())
+    {
+        LogPrintf("ERROR: SetMerkleBranch(): couldn't find cert in block\n");
+        return -1;
+    }
+    return nIndex;
+}
+#else
 int CMerkleTx::SetMerkleBranch(const CBlock& block)
 {
     AssertLockHeld(cs_main);
@@ -4352,8 +4428,13 @@ int CMerkleTx::SetMerkleBranch(const CBlock& block)
 
     return chainActive.Height() - pindex->nHeight + 1;
 }
+#endif
 
+#if 0
 int CMerkleTx::GetDepthInMainChainINTERNAL(const CBlockIndex* &pindexRet) const
+#else
+int MerkleAbstractBase::GetDepthInMainChainINTERNAL(const CBlockIndex* &pindexRet) const
+#endif
 {
     if (hashBlock.IsNull() || nIndex == -1)
         return 0;
@@ -4577,45 +4658,63 @@ void CWalletTx::GetNotesAmount(
     }
 }
 
-int CMerkleCert::GetDepthInMainChainINTERNAL(const CBlockIndex* &pindexRet) const
+int MerkleAbstractBase::SetMerkleBranch(const CBlock& block)
 {
-    // TODO generalize and move in base class
-    if (hashBlock.IsNull() || nIndex == -1)
-        return 0;
     AssertLockHeld(cs_main);
-
-    // Find the block it claims to be in
-    BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
-    if (mi == mapBlockIndex.end())
-        return 0;
-    CBlockIndex* pindex = (*mi).second;
-    if (!pindex || !chainActive.Contains(pindex))
-        return 0;
-
-    // Make sure the merkle branch connects to this block
-    if (!fMerkleVerified)
-    {
-        // the cert merkle root will be stored somehow in the field reserved for sc, because
-        // changing the block header is not an option
-        if (CBlock::CheckMerkleBranch(GetHash(), vMerkleBranch, nIndex) != pindex->hashMerkleRoot)
-            return 0;
-        fMerkleVerified = true;
-    }
-
-    pindexRet = pindex;
-    return chainActive.Height() - pindex->nHeight + 1;
-}
-
-int CMerkleCert::SetMerkleBranch(const CBlock& block)
-{
-    // TODO generalize and move in base class
-    AssertLockHeld(cs_main);
-    //CBlock blockTmp;
 
     // Update the tx's hashBlock
     hashBlock = block.GetHash();
 
-    // Locate the transaction
+    nIndex = GetIndexInBlock(block);
+
+    if (nIndex == -1)
+    {
+        vMerkleBranch.clear();
+        return 0;
+    }
+
+    // Fill in merkle branch
+    vMerkleBranch = block.GetMerkleBranch(nIndex);
+
+    // Is the obj in a block that's in the main chain
+    BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
+    if (mi == mapBlockIndex.end())
+        return 0;
+
+    const CBlockIndex* pindex = (*mi).second;
+    if (!pindex || !chainActive.Contains(pindex))
+        return 0;
+
+    return chainActive.Height() - pindex->nHeight + 1;
+}
+
+#if 1
+int CMerkleCert::GetIndexInBlock(const CBlock& block)
+{
+    // Locate the index of certificate
+    for (nIndex = 0; nIndex < (int)block.vcert.size(); nIndex++)
+        if (block.vcert[nIndex] == *(CScCertificate*)this)
+            break;
+
+    if (nIndex == (int)block.vcert.size())
+    {
+        LogPrintf("ERROR: SetMerkleBranch(): couldn't find cert in block\n");
+        return -1;
+    }
+
+    // certificates are ideally in a global common vector after all transactions
+    nIndex += block.vtx.size();
+    return nIndex;
+}
+#else
+int CMerkleCert::SetMerkleBranch(const CBlock& block)
+{
+    AssertLockHeld(cs_main);
+
+    // Update the tx's hashBlock
+    hashBlock = block.GetHash();
+
+    // Locate the index of certificate
     for (nIndex = 0; nIndex < (int)block.vcert.size(); nIndex++)
         if (block.vcert[nIndex] == *(CScCertificate*)this)
             break;
@@ -4643,6 +4742,7 @@ int CMerkleCert::SetMerkleBranch(const CBlock& block)
 
     return chainActive.Height() - pindex->nHeight + 1;
 }
+#endif
 
 int CMerkleCert::GetBlocksToMaturity() const
 {
@@ -4652,14 +4752,6 @@ int CMerkleCert::GetBlocksToMaturity() const
     return max(0, (COIN_CERTIFICATE_MATURITY+1) - GetDepthInMainChain());
 }
 
-/*
-bool CMerkleCert::AcceptToMemoryPool(bool fLimitFree, bool fRejectAbsurdFee)
-{
-    // TODO
-    return true;
-}
-*/
-
 CAmount CWalletCert::GetImmatureCredit(bool fUseCache) const
 {
     if (IsInMainChain())
@@ -4668,15 +4760,6 @@ CAmount CWalletCert::GetImmatureCredit(bool fUseCache) const
     }
     return 0;
 }
-
-/*
-CAmount CWalletCert::GetAvailableCredit(bool fUseCache) const
-{
-    LogPrint("cert", "%s():%d - called for obj[%s] ===> TODO\n", __func__, __LINE__, GetHash().ToString());
-    // TODO
-    return 0;
-}
-*/
 
 CAmount CWalletCert::GetImmatureWatchOnlyCredit(const bool& fUseCache) const
 {
@@ -4736,15 +4819,6 @@ void CWalletCert::GetAmounts(std::list<COutputEntry>& listReceived, std::list<CO
     }
 }
 
-/*
-void CWalletCert::GetAccountAmounts(const std::string& strAccount, CAmount& nReceived,
-    CAmount& nSent, CAmount& nFee, const isminefilter& filter) const 
-{
-    // TODO
-    LogPrint("cert", "%s():%d - called for obj[%s] ===> TODO\n", __func__, __LINE__, GetHash().ToString());
-}
-*/
-
 bool CWalletCert::IsTrusted() const 
 {
     // certificateds are trusted
@@ -4780,8 +4854,30 @@ bool CWalletCert::RelayWalletTransaction()
     return true;
 }
 
+bool CWalletCert::IsInvolvingMe(mapNoteData_t &noteData) const
+{
+    if (!pwallet)
+    {
+        LogPrintf("%s():%d - null wallet ptr\n", __func__, __LINE__);
+        return false;
+    }
+    return (pwallet->IsMine(*this));
+}
+
+
 std::shared_ptr<CWalletObjBase> CWalletCert::MakeWalletMapObject() const
 {
     return std::shared_ptr<CWalletObjBase>( new CWalletCert(*this));
 }
 
+std::shared_ptr<CWalletObjBase> CWalletObjBase::MakeWalletObjectBase(const CTransactionBase& obj, const CWallet* pwallet)
+{
+    if (obj.IsCoinCertified() )
+    {
+        return std::shared_ptr<CWalletObjBase>( new CWalletCert(pwallet, dynamic_cast<const CScCertificate&>(obj)) );
+    }
+    else
+    {
+        return std::shared_ptr<CWalletObjBase>( new CWalletTx(pwallet, dynamic_cast<const CTransaction&>(obj)) );
+    }
+}

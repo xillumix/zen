@@ -627,6 +627,7 @@ class CBlock;
 class CBlockTemplate;
 class CScriptCheck;
 class CBlockUndo;
+class UniValue;
 
 
 // abstract interface for CTransaction and CScCertificate
@@ -718,6 +719,7 @@ public:
 
     virtual bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const { return true; }
     virtual void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const { return; }
+    virtual void AddJoinSplitToJSON(UniValue& entry) const { return; }
     virtual bool HaveInputs(const CCoinsViewCache& view) const { return true; }
     virtual bool CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const { return true; };
     virtual bool HasNoInputsInMempool(const CTxMemPool& pool) const { return true; }
@@ -950,6 +952,7 @@ public:
     bool IsApplicableToState() const override;
     bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const override;
     void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const override;
+    void AddJoinSplitToJSON(UniValue& entry) const override;
     bool HaveInputs(const CCoinsViewCache& view) const override;
     void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const override;
     void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const override;

@@ -279,11 +279,11 @@ struct CNotePlaintextEntry
     libzcash::NotePlaintext plaintext;
 };
 
-
 class MerkleAbstractBase : virtual public CTransactionBase
 {
 protected:
-    virtual int GetDepthInMainChainINTERNAL(const CBlockIndex* &pindexRet) const = 0;
+    virtual int GetIndexInBlock(const CBlock& block) = 0;
+    int GetDepthInMainChainINTERNAL(const CBlockIndex* &pindexRet) const;
 public:
     uint256 hashBlock;
     std::vector<uint256> vMerkleBranch;
@@ -300,44 +300,26 @@ public:
     }
 
     virtual uint256 GetObjHash() const = 0;
-    virtual int SetMerkleBranch(const CBlock& block) = 0;
     virtual int GetBlocksToMaturity() const = 0;
-    virtual bool AcceptToMemoryPool(bool fLimitFree=true, bool fRejectAbsurdFee=true);
 
+    /**
+     * Return depth of transaction in blockchain:
+     * -1  : not in blockchain, and not in memory pool (conflicted transaction)
+     *  0  : in memory pool, waiting to be included in a block
+     * >=1 : this many blocks deep in the main chain
+     */
     int GetDepthInMainChain(const CBlockIndex* &pindexRet) const;
     int GetDepthInMainChain() const { const CBlockIndex *pindexRet; return GetDepthInMainChain(pindexRet); }
-    bool IsInMainChain() const { const CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
 
-    MerkleAbstractBase& operator=(const MerkleAbstractBase& m)
-    {
-        CTransactionBase::operator=(m);
-        return *this;
-    }
-    MerkleAbstractBase& operator=(MerkleAbstractBase&& m)
-    {
-        CTransactionBase::operator=(m);
-        return *this;
-    }
-    MerkleAbstractBase(const MerkleAbstractBase&) = default;
-    MerkleAbstractBase() = default;
+    int SetMerkleBranch(const CBlock& block);
+    bool IsInMainChain() const { const CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
+    bool AcceptToMemoryPool(bool fLimitFree=true, bool fRejectAbsurdFee=true);
 };
 
 /** A transaction with a merkle branch linking it to the block chain. */
 class CMerkleTx : public CTransaction, virtual public MerkleAbstractBase
 {
-private:
-    int GetDepthInMainChainINTERNAL(const CBlockIndex* &pindexRet) const override;
-
-#if 0
-public:
-    uint256 hashBlock;
-    std::vector<uint256> vMerkleBranch;
-    int nIndex;
-
-    // memory only
-    mutable bool fMerkleVerified;
-#endif
-
+    int GetIndexInBlock(const CBlock& block) override;
 public:
     CMerkleTx(const CMerkleTx&) = default;
     CMerkleTx& operator=(const CMerkleTx& tx)
@@ -357,15 +339,6 @@ public:
         Init();
     }
 
-#if 0
-    void Init()
-    {
-        hashBlock = uint256();
-        nIndex = -1;
-        fMerkleVerified = false;
-    }
-#endif
-
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -377,30 +350,15 @@ public:
         READWRITE(nIndex);
     }
 
-    int SetMerkleBranch(const CBlock& block) override;
-
     uint256 GetObjHash() const override { return GetHash(); }
 
-    /**
-     * Return depth of transaction in blockchain:
-     * -1  : not in blockchain, and not in memory pool (conflicted transaction)
-     *  0  : in memory pool, waiting to be included in a block
-     * >=1 : this many blocks deep in the main chain
-     */
-#if 0
-    int GetDepthInMainChain(const CBlockIndex* &pindexRet) const;
-    int GetDepthInMainChain() const { const CBlockIndex *pindexRet; return GetDepthInMainChain(pindexRet); }
-    bool IsInMainChain() const { const CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
-#endif
     int GetBlocksToMaturity() const override;
-//    bool AcceptToMemoryPool(bool fLimitFree=true, bool fRejectAbsurdFee=true);
 };
 
 /** A certificate with a merkle branch linking it to the block chain. */
 class CMerkleCert : public CScCertificate, virtual public MerkleAbstractBase
 {
-private:
-    int GetDepthInMainChainINTERNAL(const CBlockIndex* &pindexRet) const override;
+    int GetIndexInBlock(const CBlock& block) override;
 
 public:
     CMerkleCert(const CMerkleCert&) = default;
@@ -432,23 +390,9 @@ public:
         READWRITE(nIndex);
     }
 
-    int SetMerkleBranch(const CBlock& block) override;
-
     uint256 GetObjHash() const { return GetHash(); }
 
-    /**
-     * Return depth of transaction in blockchain:
-     * -1  : not in blockchain, and not in memory pool (conflicted transaction)
-     *  0  : in memory pool, waiting to be included in a block
-     * >=1 : this many blocks deep in the main chain
-     */
-#if 0
-    int GetDepthInMainChain(const CBlockIndex* &pindexRet) const;
-    int GetDepthInMainChain() const { const CBlockIndex *pindexRet; return GetDepthInMainChain(pindexRet); }
-    bool IsInMainChain() const { const CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
-#endif
     int GetBlocksToMaturity() const override;
-//    bool AcceptToMemoryPool(bool fLimitFree=true, bool fRejectAbsurdFee=true);
 };
 
 class CWalletObjBase : virtual public MerkleAbstractBase
@@ -476,12 +420,7 @@ public:
     mutable CAmount nImmatureWatchCreditCached;
     mutable CAmount nAvailableWatchCreditCached;
     mutable CAmount nChangeCached;
-/*
-    ~CWalletObjBase() {}
-    CWalletObjBase() {}
-    CWalletObjBase(const CWalletObjBase& wob) : MerkleAbstractBase(wob) {}
-*/
-#if 1
+
     CWalletObjBase& operator=(const CWalletObjBase& o)
     {
         MerkleAbstractBase::operator=(o);
@@ -513,9 +452,7 @@ public:
 
         return *this;
     }
-#else
-    CWalletObjBase& operator=(CWalletObjBase&&) = default;
-#endif
+
     CWalletObjBase(const CWalletObjBase&) = default;
     CWalletObjBase() = default;
 
@@ -578,6 +515,7 @@ public:
     virtual int GetRequestCount() const = 0;
 
     virtual bool RelayWalletTransaction() = 0;
+    virtual bool IsInvolvingMe(mapNoteData_t &noteData) const = 0;
 
     virtual std::set<uint256> GetConflicts() const { return std::set<uint256>(); } // default is the empty set (certs has no conflcts)
     virtual void GetConflicts(std::set<uint256>& result) const { } // default is empty (certs has no conflcts)
@@ -626,7 +564,7 @@ public:
     }
 
     virtual std::shared_ptr<CWalletObjBase> MakeWalletMapObject() const = 0;
-
+    static std::shared_ptr<CWalletObjBase> MakeWalletObjectBase(const CTransactionBase& obj, const CWallet* pwallet);
 };
 
 /** 
@@ -737,6 +675,7 @@ public:
     int GetRequestCount() const override;
 
     bool RelayWalletTransaction() override;
+    bool IsInvolvingMe(mapNoteData_t &noteData) const override;
 
     std::set<uint256> GetConflicts() const override;
     void GetConflicts(std::set<uint256>& result) const override;
@@ -857,6 +796,7 @@ public:
     int GetRequestCount() const override;
 
     bool RelayWalletTransaction() override;
+    bool IsInvolvingMe(mapNoteData_t &noteData) const override;
 
     std::shared_ptr<CWalletObjBase> MakeWalletMapObject() const override;
 };
@@ -867,20 +807,12 @@ public:
 class COutput
 {
 public:
-#if 0
-    const CWalletTx *tx;
-#else
     const CWalletObjBase *tx;
-#endif
     int i;
     int nDepth;
     bool fSpendable;
 
-#if 0
-    COutput(const CWalletTx *txIn, int iIn, int nDepthIn, bool fSpendableIn)
-#else
     COutput(const CWalletObjBase *txIn, int iIn, int nDepthIn, bool fSpendableIn)
-#endif
     {
         tx = txIn; i = iIn; nDepth = nDepthIn; fSpendable = fSpendableIn;
     }
@@ -1364,8 +1296,12 @@ public:
 #endif
     void SyncTransaction(const CTransaction& tx, const CBlock* pblock);
     void SyncCertificate(const CScCertificate& cert, const CBlock* pblock);
+#if 0
     bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate);
     bool AddToWalletIfInvolvingMe(const CScCertificate& cert, const CBlock* pblock, bool fUpdate);
+#else
+    bool AddToWalletIfInvolvingMe(const CTransactionBase& obj, const CBlock* pblock, bool fUpdate);
+#endif
     void EraseFromWallet(const uint256 &hash);
     void WitnessNoteCommitment(
          std::vector<uint256> commitments,

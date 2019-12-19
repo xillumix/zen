@@ -20,6 +20,9 @@
 #include "core_io.h"
 #include "miner.h"
 #include "utilmoneystr.h"
+#include <univalue.h>
+
+extern UniValue TxJoinSplitToJSON(const CTransaction& tx);
 
 JSDescription JSDescription::getNewInstance(bool useGroth) {
 	JSDescription js;
@@ -556,6 +559,7 @@ bool CTransaction::IsAllowedInMempool(CValidationState& state, CTxMemPool& pool)
 bool CTransaction::HasNoInputsInMempool(const CTxMemPool& pool) const { return true; }
 bool CTransaction::HaveJoinSplitRequirements(const CCoinsViewCache& view) const { return true; }
 void CTransaction::HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const { return; };
+void CTransaction::AddJoinSplitToJSON(UniValue& entry) const { return; }
 bool CTransaction::HaveInputs(const CCoinsViewCache& view) const { return true; }
 void CTransaction::UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const { return; }
 void CTransaction::UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo &undo, int nHeight) const { return; }
@@ -769,6 +773,11 @@ void CTransaction::HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) co
             tree.append(note_commitment);
         }
     }
+}
+
+void CTransaction::AddJoinSplitToJSON(UniValue& entry) const
+{
+    entry.push_back(Pair("vjoinsplit", TxJoinSplitToJSON(*this)));
 }
 
 bool CTransaction::HaveInputs(const CCoinsViewCache& view) const
