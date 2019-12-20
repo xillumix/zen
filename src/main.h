@@ -590,5 +590,11 @@ int32_t ComputeBlockVersion(const CBlockIndex* pindexPrev, const Consensus::Para
 namespace Consensus {
 bool CheckTxInputs(const CTransaction& tx, CValidationState& state, const CCoinsViewCache& inputs, int nSpendHeight, const Consensus::Params& consensusParams);
 }
+#if 1
+class CTxInUndo;
+class COutPoint;
+// for certificates refactory
+bool ApplyTxInUndo(const CTxInUndo& undo, CCoinsViewCache& view, const COutPoint& out);
+#endif
 
 #endif // BITCOIN_MAIN_H

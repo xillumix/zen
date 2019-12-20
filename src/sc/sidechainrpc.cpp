@@ -16,7 +16,7 @@ namespace Sidechain
 void AddSidechainOutsToJSON (const CTransaction& tx, UniValue& parentObj)
 {
 #else
-    // TODO add a virtual method to base class which calls this
+    // TODO cert: add a virtual method to base class which calls this
 void AddSidechainOutsToJSON (const CTransactionBase& obj, UniValue& parentObj)
 {
     const CTransaction* ptx = dynamic_cast<const CTransaction*>(&obj);

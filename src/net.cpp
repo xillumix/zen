@@ -2144,7 +2144,7 @@ void RelayCertificate(const CScCertificate& cert, const CDataStream& ss)
             continue;
         LOCK(pnode->cs_filter);
 #if 0
-// TODO
+// TODO cert: handle a node filter for pushing inv
         if (pnode->pfilter)
         {
             if (pnode->pfilter->IsRelevantAndUpdate(cert))

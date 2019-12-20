@@ -555,8 +555,10 @@ bool CTransaction::ContextualCheck(CValidationState& state, int nHeight, int dos
 bool CTransaction::IsStandard(std::string& reason, int nHeight) const { return true; }
 bool CTransaction::CheckFinal(int flags) const { return true; }
 bool CTransaction::IsApplicableToState() const { return true; }
-bool CTransaction::IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const { return true; }
+bool CTransaction::IsAllowedInMempool(CValidationState& state, const CTxMemPool& pool) const { return true; }
 bool CTransaction::HasNoInputsInMempool(const CTxMemPool& pool) const { return true; }
+bool CTransaction::RestoreInputs(const CTxUndo& txundo, CCoinsViewCache& view, bool& fClean) const { return true; };
+void CTransaction::UnspendNullifiers(CCoinsViewCache& view) const { return; }
 bool CTransaction::HaveJoinSplitRequirements(const CCoinsViewCache& view) const { return true; }
 void CTransaction::HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const { return; };
 void CTransaction::AddJoinSplitToJSON(UniValue& entry) const { return; }
@@ -727,7 +729,7 @@ bool CTransaction::IsApplicableToState() const
     return Sidechain::ScMgr::instance().IsTxApplicableToState(*this);
 }
     
-bool CTransaction::IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const
+bool CTransaction::IsAllowedInMempool(CValidationState& state, const CTxMemPool& pool) const
 {
     for (unsigned int i = 0; i < vin.size(); i++)
     {
@@ -758,6 +760,32 @@ bool CTransaction::HasNoInputsInMempool(const CTxMemPool& pool) const
         if (pool.exists(vin[i].prevout.hash))
             return false;
     return true;
+}
+
+bool CTransaction::RestoreInputs(const CTxUndo& txundo, CCoinsViewCache& view, bool& fClean) const
+{
+    // restore inputs
+    if (!IsCoinBase())
+    {
+        if (txundo.vprevout.size() != vin.size())
+            return false;
+        for (unsigned int j = vin.size(); j-- > 0;) {
+            const COutPoint &out = vin[j].prevout;
+            const CTxInUndo &undo = txundo.vprevout[j];
+            if (!::ApplyTxInUndo(undo, view, out))
+                fClean = false;
+        }
+    }
+    return true;
+}
+
+void CTransaction::UnspendNullifiers(CCoinsViewCache& view) const
+{
+    BOOST_FOREACH(const JSDescription &joinsplit, vjoinsplit) {
+        BOOST_FOREACH(const uint256 &nf, joinsplit.nullifiers) {
+            view.SetNullifier(nf, false);
+        }
+    }
 }
 
 bool CTransaction::HaveJoinSplitRequirements(const CCoinsViewCache& view) const

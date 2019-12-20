@@ -16,6 +16,8 @@
 #include <boost/filesystem.hpp>
 
 using ::testing::Return;
+using ::testing::Eq;
+using ::testing::ByRef;
 
 extern ZCJoinSplit* params;
 
@@ -145,13 +147,13 @@ TEST(wallet_tests, note_data_serialisation) {
 
 TEST(wallet_tests, find_unspent_notes) {
     SelectParams(CBaseChainParams::TESTNET);
-
+/*
     // print logs to console
     fDebug = true;
     fPrintToConsole = true;
     mapArgs["-debug"] = "forks";
     mapMultiArgs["-debug"].push_back("forks");
-
+*/
     CWallet wallet;
     auto sk = libzcash::SpendingKey::random();
     wallet.AddSpendingKey(sk);
@@ -249,7 +251,6 @@ TEST(wallet_tests, find_unspent_notes) {
 
 
     // Let's receive a new note
-#if 1
     CWalletTx wtx3;
     {
         auto wtx = GetValidReceive(sk, 20, true);
@@ -267,20 +268,6 @@ TEST(wallet_tests, find_unspent_notes) {
 
         wtx3 = wtx;
     }
-#else
-    auto wtx3 = GetValidReceive(sk, 20, true);
-    auto note1 = GetNote(sk, wtx3, 0, 1);
-    auto nullifier1 = note1.nullifier(sk);
-
-    mapNoteData_t noteData1;
-    JSOutPoint jsoutpt1 {wtx3.GetHash(), 0, 1};
-    CNoteData nd1 {sk.address(), nullifier1};
-    noteData1[jsoutpt1] = nd1;
-
-    wtx3.SetNoteData(noteData1);
-    wallet.AddToWallet(wtx3, true, NULL);
-    EXPECT_FALSE(wallet.IsSpent(nullifier1));
-#endif
 
     // Fake-mine the new transaction
     EXPECT_EQ(1, chainActive.Height());
@@ -918,8 +905,6 @@ TEST(wallet_tests, ClearNoteWitnessCache) {
     EXPECT_EQ(0, wallet.nWitnessCacheSize);
 }
 
-// TODO
-#if 0
 TEST(wallet_tests, WriteWitnessCache) {
     TestWallet wallet;
     MockWalletDB walletdb;
@@ -939,19 +924,19 @@ TEST(wallet_tests, WriteWitnessCache) {
         .WillRepeatedly(Return(true));
 
     // WriteTx fails
-    EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), wtx))
-        .WillOnce(Return(false));
-    EXPECT_CALL(walletdb, TxnAbort())
-        .Times(1);
-    wallet.SetBestChain(walletdb, loc);
-
-    // WriteTx throws
-    EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), wtx))
-        .WillOnce(ThrowLogicError());
-    EXPECT_CALL(walletdb, TxnAbort())
-        .Times(1);
-    wallet.SetBestChain(walletdb, loc);
-    EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), wtx))
+    EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), Eq(ByRef(wtx))))
+        .WillOnce(Return(false));                   
+    EXPECT_CALL(walletdb, TxnAbort())               
+        .Times(1);                                  
+    wallet.SetBestChain(walletdb, loc);             
+                                                    
+    // WriteTx throws                               
+    EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), Eq(ByRef(wtx))))
+        .WillOnce(ThrowLogicError());               
+    EXPECT_CALL(walletdb, TxnAbort())               
+        .Times(1);                                  
+    wallet.SetBestChain(walletdb, loc);             
+    EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), Eq(ByRef(wtx))))
         .WillRepeatedly(Return(true));
 
     // WriteWitnessCacheSize fails
@@ -996,7 +981,6 @@ TEST(wallet_tests, WriteWitnessCache) {
     // Everything succeeds
     wallet.SetBestChain(walletdb, loc);
 }
-#endif
 
 TEST(wallet_tests, UpdateNullifierNoteMap) {
     TestWallet wallet;
@@ -1080,8 +1064,6 @@ TEST(wallet_tests, UpdatedNoteData) {
     // TODO: The new note should get witnessed (but maybe not here) (#1350)
 }
 
-// TODO
-#if 0
 TEST(wallet_tests, MarkAffectedTransactionsDirty) {
     TestWallet wallet;
 
@@ -1121,4 +1103,3 @@ TEST(wallet_tests, MarkAffectedTransactionsDirty) {
     EXPECT_FALSE(wallet.mapWallet[hash]->fDebitCached);
 #endif
 }
-#endif

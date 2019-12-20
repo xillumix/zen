@@ -152,13 +152,13 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry,
 
 bool CTxMemPool::addUnchecked(const uint256& hash, const CCertificateMemPoolEntry &entry, bool fCurrentEstimate)
 {
-    // TODO use a separate cs
+    // TODO cert: use a separate cs
     LOCK(cs);
     mapCertificate[hash] = entry;
     nCertificatesUpdated++;
     totalCertificateSize += entry.GetCertificateSize();
     cachedInnerUsage += entry.DynamicMemoryUsage();
-// TODO for the time being skip the part on policy estimator, certificates currently have maximum priority
+// TODO cert: for the time being skip the part on policy estimator, certificates currently have maximum priority
 // minerPolicyEstimator->processTransaction(entry, fCurrentEstimate);
     return true;
 }
@@ -167,7 +167,7 @@ bool CTxMemPool::addUnchecked(
     const CTransactionBase& tx, const CAmount& nFee, int64_t nTime, double dPriority, int nHeight,
     bool poolHasNoInputsOf, bool fCurrentEstimate)
 {
-    // TODO maybe it is better call a virtual addUncheckedToMemPool() in CTransactionBase
+    // TODO cert: maybe it is better call a virtual addUncheckedToMemPool() in CTransactionBase
 
     // for the time being we choose to have two separate pools
     if (dynamic_cast<const CTransaction*>(&tx) )
@@ -249,7 +249,7 @@ void CTxMemPool::remove(const CScCertificate &origCert, std::list<CScCertificate
     // Remove transaction from memory pool
     {
         LOCK(cs);
-// TODO handle certificates children (normal txes) recursively
+// TODO cert: handle certificates children (normal txes) recursively
 #if 0
         std::deque<uint256> txToRemove;
         txToRemove.push_back(origCert.GetHash());
@@ -311,7 +311,7 @@ void CTxMemPool::remove(const CScCertificate &origCert, std::list<CScCertificate
         LogPrint("cert", "%s():%d - removing cert [%s] from mempool\n", __func__, __LINE__, hash.ToString() );
         mapCertificate.erase(hash);
         nCertificatesUpdated++;
-// TODO miner policy to be handled for certificates
+// TODO cert: miner policy to be handled for certificates
 //        minerPolicyEstimator->removeTx(hash);
 #endif
     }
@@ -531,7 +531,7 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
         const auto& cert = it->second.GetCertificate();
         CValidationState state;
         assert(cert.ContextualCheckInputs(state, mempoolDuplicate, false, chainActive, 0, false, Params().GetConsensus(), NULL));
-        // TODO it is useful updating coins with cert outputs because the cache is checked below for any tx inputs
+        // TODO cert: check this - it is useful updating coins with cert outputs because the cache is checked below for any tx inputs
         // and maybe some tx has a cert out as its input.
         cert.UpdateCoins(state, mempoolDuplicate, 1000000);
     }

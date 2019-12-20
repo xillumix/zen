@@ -113,6 +113,7 @@ void CScCertificate::AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount 
 
 void CScCertificate::UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const
 {
+    // no inputs in cert, therefore no need to handle block undo
     CBlockUndo dum;
     UpdateCoins(state, view, dum, nHeight);
 }
@@ -121,8 +122,6 @@ void CScCertificate::UpdateCoins(CValidationState &state, CCoinsViewCache& input
 {
     LogPrint("cert", "%s():%d - adding coins for cert [%s]\n", __func__, __LINE__, GetHash().ToString());
     inputs.ModifyCoins(GetHash())->FromTx(*this, nHeight);
-
-    // TODO handle blockundo
 }
 
 
@@ -138,15 +137,10 @@ bool CScCertificate::CheckFinal(int flags) const
     return true;
 }
 
-bool CScCertificate::IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const
-{
-    // no conflicts to be analized as of now for certs (containment is already checked by the caller beforehand)
-    return true;
-}
 
 double CScCertificate::GetPriority(const CCoinsViewCache &view, int nHeight) const
 {
-    // TODO, for the time being return max prio, as shielded txes do
+    // TODO cert: for the time being return max prio, as shielded txes do
     return MAX_PRIORITY;
 }
 
@@ -159,6 +153,7 @@ void CScCertificate::SyncWithWallets(const CBlock* pblock) const { return; }
 bool CScCertificate::Check(CValidationState& state, libzcash::ProofVerifier& /*unused*/) const { return true; }
 bool CScCertificate::IsApplicableToState() const { return true; }
 bool CScCertificate::IsStandard(std::string& reason, int nHeight) const { return true; }
+bool CScCertificate::IsAllowedInMempool(CValidationState& state, const CTxMemPool& pool) const { return true; }
 #else
 void CScCertificate::SyncWithWallets(const CBlock* pblock) const
 {
@@ -208,6 +203,11 @@ bool CScCertificate::IsApplicableToState() const
 bool CScCertificate::IsStandard(std::string& reason, int nHeight) const
 {
     return CheckOutputsAreStandard(nHeight, reason);
+}
+
+bool CScCertificate::IsAllowedInMempool(CValidationState& state, const CTxMemPool& pool) const
+{
+    return Sidechain::ScMgr::instance().IsCertAllowedInMempool(pool, *this, state);
 }
 #endif
 

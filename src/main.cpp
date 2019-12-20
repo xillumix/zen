@@ -1432,7 +1432,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         
         CAmount nValueIn = 0;
 
-        // TODO move this in a virtual method, certificates do not have to check coins, but have sort of this instead:
+        // TODO cert: move this in a virtual method, certificates do not have to check coins, but have sort of this instead:
         //     nValueIn = cert.totalAmount;
         {
             LOCK(pool.cs);
@@ -1728,7 +1728,6 @@ bool GetCertificate(const uint256 &hash, CScCertificate &certOut, uint256 &hashB
         return true;
     }
 
-#if 1 // TODO
     if (fTxIndex) {
         CDiskTxPos postx;
         if (pblocktree->ReadTxIndex(hash, postx)) {
@@ -1750,7 +1749,7 @@ bool GetCertificate(const uint256 &hash, CScCertificate &certOut, uint256 &hashB
         }
     }
 
-    if (fAllowSlow) { // use coin database to locate block that contains transaction, and scan it
+    if (fAllowSlow) { // use coin database to locate block that contains cert, and scan it
         int nHeight = -1;
         {
             CCoinsViewCache &view = *pcoinsTip;
@@ -1765,16 +1764,15 @@ bool GetCertificate(const uint256 &hash, CScCertificate &certOut, uint256 &hashB
     if (pindexSlow) {
         CBlock block;
         if (ReadBlockFromDisk(block, pindexSlow)) {
-            BOOST_FOREACH(const CScCertificate &tx, block.vcert) {
-                if (tx.GetHash() == hash) {
-                    certOut = tx;
+            BOOST_FOREACH(const CScCertificate &cert, block.vcert) {
+                if (cert.GetHash() == hash) {
+                    certOut = cert;
                     hashBlock = pindexSlow->GetBlockHash();
                     return true;
                 }
             }
         }
     }
-#endif
 
     return false;
 }
@@ -2338,7 +2336,10 @@ bool AbortNode(CValidationState& state, const std::string& strMessage, const std
  * @param out The out point that corresponds to the tx input.
  * @return True on success.
  */
-static bool ApplyTxInUndo(const CTxInUndo& undo, CCoinsViewCache& view, const COutPoint& out)
+#if 0
+static
+#endif
+bool ApplyTxInUndo(const CTxInUndo& undo, CCoinsViewCache& view, const COutPoint& out)
 {
     bool fClean = true;
 
@@ -2384,39 +2385,53 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
         return error("DisconnectBlock(): block and undo data inconsistent");
 
     // undo transactions in reverse order
+#if 0
     for (int i = block.vtx.size() - 1; i >= 0; i--) {
         const CTransaction &tx = block.vtx[i];
+#else
+    std::vector<const CTransactionBase*> vTxBase;
+    block.GetTxAndCertsVector(vTxBase);
+
+    for (int i = vTxBase.size() - 1; i >= 0; i--)
+    {
+        const CTransactionBase &tx = *(vTxBase[i]);
+#endif
         uint256 hash = tx.GetHash();
 
         // Check that all outputs are available and match the outputs in the block itself
         // exactly.
         {
-        CCoinsModifier outs = view.ModifyCoins(hash);
-        outs->ClearUnspendable();
-
-        CCoins outsBlock(tx, pindex->nHeight);
-        // The CCoins serialization does not serialize negative numbers.
-        // No network rules currently depend on the version here, so an inconsistency is harmless
-        // but it must be corrected before txout nversion ever influences a network rule.
-        if (outsBlock.nVersion < 0)
-            outs->nVersion = outsBlock.nVersion;
-        if (*outs != outsBlock)
-            fClean = fClean && error("DisconnectBlock(): added transaction mismatch? database corrupted");
-
-        // remove outputs
-        outs->Clear();
+            CCoinsModifier outs = view.ModifyCoins(hash);
+            outs->ClearUnspendable();
+ 
+            CCoins outsBlock(tx, pindex->nHeight);
+            // The CCoins serialization does not serialize negative numbers.
+            // No network rules currently depend on the version here, so an inconsistency is harmless
+            // but it must be corrected before txout nversion ever influences a network rule.
+            if (outsBlock.nVersion < 0)
+                outs->nVersion = outsBlock.nVersion;
+            if (*outs != outsBlock)
+                fClean = fClean && error("DisconnectBlock(): added transaction mismatch? database corrupted");
+ 
+            // remove outputs
+            outs->Clear();
         }
 
+#if 0
         // unspend nullifiers
         BOOST_FOREACH(const JSDescription &joinsplit, tx.vjoinsplit) {
             BOOST_FOREACH(const uint256 &nf, joinsplit.nullifiers) {
                 view.SetNullifier(nf, false);
             }
         }
+#else
+        tx.UnspendNullifiers(view);
+#endif
 
         // restore inputs
         if (i > 0) { // not coinbases
             const CTxUndo &txundo = blockUndo.vtxundo[i-1];
+#if 0
             if (txundo.vprevout.size() != tx.vin.size())
                 return error("DisconnectBlock(): transaction and undo data inconsistent");
             for (unsigned int j = tx.vin.size(); j-- > 0;) {
@@ -2425,6 +2440,12 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
                 if (!ApplyTxInUndo(undo, view, out))
                     fClean = false;
             }
+#else
+            if (!tx.RestoreInputs(txundo, view, fClean) )
+            {
+                return error("DisconnectBlock(): transaction and undo data inconsistent");
+            }
+#endif
         }
     }
 
@@ -2685,18 +2706,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         nSigOps += GetLegacySigOpCount(tx);
 #else
     std::vector<const CTransactionBase*> vTxBase;
-    /*
-    vTxBase.reserve(block.vtx.size() + block.vcert.size()); 
-
-    for (unsigned int i = 0; i < block.vtx.size(); i++)
-    {
-        vTxBase.push_back(&(block.vtx[i]));
-    }
-    for (unsigned int i = 0; i < block.vcert.size(); i++)
-    {
-        vTxBase.push_back(&(block.vcert[i]));
-    }
-    */
     block.GetTxAndCertsVector(vTxBase);
 
     for (unsigned int i = 0; i < vTxBase.size(); i++)
@@ -3083,7 +3092,7 @@ bool static DisconnectTip(CValidationState &state) {
         return error("DisconnectTip(): DisconnectBlock %s failed", pindexDelete->GetBlockHash().ToString());
     }
 
-    // Resurrect mempool transactions from the disconnected block.
+    // Resurrect mempool transactions and certificates from the disconnected block.
     BOOST_FOREACH(const CTransaction &tx, block.vtx) {
         // ignore validation errors in resurrected transactions
         list<CTransaction> removed;
@@ -3093,6 +3102,18 @@ bool static DisconnectTip(CValidationState &state) {
             mempool.remove(tx, removed, true);
         }
     }
+#if 1
+    // TODO cert: add a removeFromMemPool() method in CTransactionBase and do it all polimorphically
+    BOOST_FOREACH(const CScCertificate &cert, block.vcert) {
+        // ignore validation errors in resurrected transactions
+        list<CScCertificate> removed;
+        CValidationState stateDummy;
+        if (!AcceptToMemoryPool(mempool, stateDummy, cert, false, NULL))
+        {
+            mempool.remove(cert, removed, true);
+        }
+    }
+#endif
     if (anchorBeforeDisconnect != anchorAfterDisconnect) {
         // The anchor may not change between block disconnects,
         // in which case we don't want to evict from the mempool yet!
@@ -3167,7 +3188,7 @@ bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *
     // Remove conflicting transactions from the mempool.
     list<CTransaction> txConflicted;
     mempool.removeForBlock(pblock->vtx, pindexNew->nHeight, txConflicted, !IsInitialBlockDownload());
-    // TODO remove also certificates from mempool
+    // TODO cert: check if certificates has potential conflict and handle it
     mempool.removeForBlock(pblock->vcert, pindexNew->nHeight, !IsInitialBlockDownload());
     mempool.check(pcoinsTip);
     // Update chainActive & related variables.
@@ -3857,8 +3878,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state,
         return false;
 
     // Check the merkle root.
-    // TODO what about certificates?
-    // TODO what about hashScMerkleRootsMap?
+    // TODO sc and cert: what about hashScMerkleRootsMap?
     if (fCheckMerkleRoot) {
         bool mutated;
         uint256 hashMerkleRoot2 = block.BuildMerkleTree(&mutated);
@@ -5105,7 +5125,7 @@ bool static AlreadyHave(const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         }
         case MSG_CERT:
         {
-            // TODO add/check other conditions such as above
+            // TODO cert: check if we must add/check other conditions such as above
             return mempool.exists(inv.hash) ||
                    pcoinsTip->HaveCoins(inv.hash);
         }

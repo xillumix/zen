@@ -627,6 +627,7 @@ class CBlock;
 class CBlockTemplate;
 class CScriptCheck;
 class CBlockUndo;
+class CTxUndo;
 class UniValue;
 
 
@@ -696,7 +697,7 @@ public:
     virtual bool ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const = 0;
     virtual bool IsStandard(std::string& reason, int nHeight) const = 0;
     virtual bool CheckFinal(int flags = -1) const = 0;
-    virtual bool IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const = 0;
+    virtual bool IsAllowedInMempool(CValidationState& state, const CTxMemPool& pool) const = 0;
     virtual bool IsApplicableToState() const = 0;
 
     virtual void SyncWithWallets(const CBlock* pblock = NULL) const = 0;
@@ -717,6 +718,8 @@ public:
     // Return sum of JoinSplit vpub_new if supported
     virtual CAmount GetJoinSplitValueIn() const { return 0; }
 
+    virtual bool RestoreInputs(const CTxUndo& txundo, CCoinsViewCache& view, bool& fClean) const { return true; }
+    virtual void UnspendNullifiers(CCoinsViewCache& view) const { return; }
     virtual bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const { return true; }
     virtual void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const { return; }
     virtual void AddJoinSplitToJSON(UniValue& entry) const { return; }
@@ -947,9 +950,11 @@ public:
     bool ContextualCheck(CValidationState& state, int nHeight, int dosLevel) const override;
     bool IsStandard(std::string& reason, int nHeight) const override;
     bool CheckFinal(int flags = -1) const override;
-    bool IsAllowedInMempool(CValidationState& state, CTxMemPool& pool) const override;
+    bool IsAllowedInMempool(CValidationState& state, const CTxMemPool& pool) const override;
     bool HasNoInputsInMempool(const CTxMemPool& pool) const override;
     bool IsApplicableToState() const override;
+    bool RestoreInputs(const CTxUndo& txundo, CCoinsViewCache& view, bool& fClean) const override;
+    void UnspendNullifiers(CCoinsViewCache& view) const override;
     bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const override;
     void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const override;
     void AddJoinSplitToJSON(UniValue& entry) const override;

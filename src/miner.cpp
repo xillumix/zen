@@ -413,9 +413,9 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
         TxPriorityCompare comparer(fSortedByFee);
         std::make_heap(vecPriority.begin(), vecPriority.end(), comparer);
 
-        // TODO for the time being, vecPriority contains certs beforehand and after them all txes
+        // TODO cert: for the time being, vecPriority contains certs beforehand and after them all txes
         // considering certs having a higher priority than any possible tx.
-        // Devise a proper alogorithm for managing tx/cert priorities
+        // An alogorithm for managing tx/cert priorities could be devised
         while (!vecPriority.empty())
         {
             // Take highest priority transaction off the priority queue:

@@ -37,7 +37,7 @@ static inline size_t RecursiveDynamicUsage(const CTransaction& tx) {
 }
 
 static inline size_t RecursiveDynamicUsage(const CScCertificate& cert) {
-    size_t mem = memusage::DynamicUsage(cert.vout); // TODO add other outputs
+    size_t mem = memusage::DynamicUsage(cert.vout); // TODO cert: add other outputs
     for (std::vector<CTxOut>::const_iterator it = cert.vout.begin(); it != cert.vout.end(); it++) {
         mem += RecursiveDynamicUsage(*it);
     }

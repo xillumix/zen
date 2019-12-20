@@ -198,7 +198,7 @@ void CertToJSON(const CScCertificate& cert, const uint256 hashBlock, UniValue& e
     x.push_back(Pair("totalAmount", ValueFromAmount(cert.totalAmount)));
     UniValue vbts(UniValue::VARR);
     for (unsigned int j = 0; j < cert.vbt_ccout.size(); j++) {
-        // TODO
+        // TODO cert: fill cert contents when appropriate
     }
     x.push_back(Pair("vbt_ccout", vbts));
     entry.push_back(Pair("cert", x));

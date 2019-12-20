@@ -78,7 +78,7 @@ class ScMgr
     void removeSidechain(const uint256& scId);
 
     bool hasSCCreationConflictsInMempool(const CTxMemPool& pool, const CTransaction& tx);
-    bool checkCertificateInMemPool(CTxMemPool& pool, const CTransaction& tx);
+    bool checkCertificateInMemPool(const CTxMemPool& pool, const CScCertificate& cert);
 
     // return true if the tx contains a fwd tr for the given scid
     static bool anyForwardTransaction(const CTransaction& tx, const uint256& scId);
@@ -106,6 +106,7 @@ class ScMgr
     bool onBlockDisconnected(const CBlock& block, int nHeight);
 
     bool IsTxAllowedInMempool(const CTxMemPool& pool, const CTransaction& tx, CValidationState& state);
+    bool IsCertAllowedInMempool(const CTxMemPool& pool, const CScCertificate& cert, CValidationState& state);
 
     static bool checkTxSemanticValidity(const CTransaction& tx, CValidationState& state);
     static bool checkCertSemanticValidity(const CScCertificate& cert, CValidationState& state);

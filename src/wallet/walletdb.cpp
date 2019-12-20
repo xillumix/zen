@@ -64,26 +64,37 @@ bool CWalletDB::WriteTx(uint256 hash, const CWalletTx& wtx)
 #else
 bool CWalletDB::WriteTx(uint256 hash, const CWalletObjBase& obj)
 {
-    // TODO handle cert and tx with a virtual in parent class?
-    const CWalletTx* t = dynamic_cast<const CWalletTx*>(&obj);
-    if (t != 0)
+    LogPrint("cert", "%s():%d - called for %s[%s], writing to db\n", __func__, __LINE__,
+        obj.IsCoinCertified()?"cert":"tx", obj.GetHash().ToString());
+    
+    nWalletDBUpdated++;
+
+    try
     {
-        nWalletDBUpdated++;
-        return Write(std::make_pair(std::string("tx"), hash), *t);
+        if (obj.IsCoinCertified() )
+        {
+            return Write(std::make_pair(std::string("cert"), hash), dynamic_cast<const CWalletCert&>(obj));
+        }
+        else
+        {
+            return Write(std::make_pair(std::string("tx"), hash), dynamic_cast<const CWalletTx&>(obj));
+        }
     }
-    const CWalletCert* c = dynamic_cast<const CWalletCert*>(&obj);
-    if (c != 0)
+    catch (const std::exception &exc)
     {
-        LogPrint("cert", "%s():%d - writing cert[%s]]\n", __func__, __LINE__, hash.ToString());
-        return Write(std::make_pair(std::string("cert"), hash), *c);
+        LogPrintf("%s():%d - ERROR writing on DB: %s\n", __func__, __LINE__, exc.what());
+        assert(false);
     }
-    assert(false);
+    catch(...)
+    {
+        LogPrintf("%s():%d - ERROR writing on DB: Unexpected exception caught\n", __func__, __LINE__);
+        assert(false);
+    }
 }
 #endif
 
 bool CWalletDB::EraseTx(uint256 hash)
 {
-    // TODO handle cetificates
     nWalletDBUpdated++;
 #if 0
     return Erase(std::make_pair(std::string("tx"), hash));
@@ -447,7 +458,10 @@ bool
 ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
              CWalletScanState &wss, string& strType, string& strErr)
 {
+    static uint count = 0;
+    uint256 hash;
     try {
+        count++;
         // Unserialize
         // Taking advantage of the fact that pair serialization
         // is just the two items serialized one after the other
@@ -466,7 +480,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         }
         else if (strType == "tx")
         {
-            uint256 hash;
+//            uint256 hash;
             ssKey >> hash;
             CWalletTx wtx;
             ssValue >> wtx;
@@ -787,6 +801,8 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         }
     } catch (...)
     {
+        LogPrintf("%s():%d - Error at record %u for type[%s] (hash[%s])\n",
+            __func__, __LINE__, count, strType, hash.ToString());
         return false;
     }
     return true;

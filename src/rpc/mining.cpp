@@ -555,7 +555,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
     if (strMode != "template")
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid mode");
 
-/* TODO this is for testing, remove comments
+/* TODO cert: this is for testing, remove comments
     if (vNodes.empty())
         throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Horizen is not connected!");
 */

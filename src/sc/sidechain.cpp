@@ -275,7 +275,7 @@ bool ScMgr::checkCertSemanticValidity(const CScCertificate& cert, CValidationSta
         return state.DoS(100, error("invalid amount or fee"), REJECT_INVALID, "bad-cert-amount-or-fee");
     }
 
-    // TODO add check on vbt_ccout
+    // TODO cert: add check on vbt_ccout
 
     return true;
 }
@@ -299,10 +299,8 @@ bool ScMgr::onBlockConnected(const CBlock& block, int nHeight)
 
     LogPrint("sc", "%s():%d - Entering with block [%s]\n", __func__, __LINE__, blockHash.ToString() );
 
-    const std::vector<CTransaction>* blockVtx = &block.vtx;
-
     int txIndex = 0;
-    BOOST_FOREACH(const CTransaction& tx, *blockVtx)
+    BOOST_FOREACH(const CTransaction& tx, block.vtx)
     {
         if (tx.nVersion == SC_TX_VERSION)
         {
@@ -362,6 +360,31 @@ bool ScMgr::onBlockConnected(const CBlock& block, int nHeight)
         txIndex++;
     }
 
+    BOOST_FOREACH(const CScCertificate& cert, block.vcert)
+    {
+        const uint256& scId = cert.scId;
+        const CAmount& totalAmount = cert.totalAmount;
+ 
+        if (!sidechainExists(scId))
+        {
+            // should not happen at this point due to previous checks
+            LogPrint("sc", "ERROR: %s():%d - BW: scId=%s not in map\n", __func__, __LINE__, scId.ToString() );
+            return false;
+        }
+
+        LogPrint("sc", "%s():%d - scId=%s balance before: %s\n",
+            __func__, __LINE__, scId.ToString(), FormatMoney(getSidechainBalance(scId)));
+ 
+        // subtract from sc amount, this include the carved fee
+        if (!updateSidechainBalance(scId, -totalAmount) )
+        {
+            return false;
+        }
+ 
+        LogPrint("sc", "%s():%d - scId=%s balance after:  %s\n",
+            __func__, __LINE__, scId.ToString(), FormatMoney(getSidechainBalance(scId)));
+    }
+
     // TODO test, remove it
     // dump_info();
 
@@ -374,11 +397,32 @@ bool ScMgr::onBlockDisconnected(const CBlock& block, int nHeight)
 
     LogPrint("sc", "%s():%d - Entering with block [%s]\n", __func__, __LINE__, blockHash.ToString() );
 
-    const std::vector<CTransaction>* blockVtx = &block.vtx;
+    BOOST_REVERSE_FOREACH(const CScCertificate& cert, block.vcert)
+    {
+        const uint256& scId = cert.scId;
+        const CAmount& totalAmount = cert.totalAmount;
+ 
+        if (!sidechainExists(scId))
+        {
+            // should not happen at this point due to previous checks
+            LogPrint("sc", "ERROR: %s():%d - BW: scId=%s not in map\n", __func__, __LINE__, scId.ToString() );
+            return false;
+        }
 
-    // do it in reverse order in block txes, they are sorted with bkw txes at the bottom, therefore
-    // they will be processed beforehand
-    BOOST_REVERSE_FOREACH(const CTransaction& tx, *blockVtx)
+        LogPrint("sc", "%s():%d - scId=%s balance before: %s\n",
+            __func__, __LINE__, scId.ToString(), FormatMoney(getSidechainBalance(scId)));
+ 
+        // subtract from sc amount, this include the carved fee
+        if (!updateSidechainBalance(scId, totalAmount) )
+        {
+            return false;
+        }
+ 
+        LogPrint("sc", "%s():%d - scId=%s balance after:  %s\n",
+            __func__, __LINE__, scId.ToString(), FormatMoney(getSidechainBalance(scId)));
+    }
+
+    BOOST_REVERSE_FOREACH(const CTransaction& tx, block.vtx)
     {
         if (tx.nVersion == SC_TX_VERSION)
         {
@@ -442,6 +486,73 @@ bool ScMgr::IsTxAllowedInMempool(const CTxMemPool& pool, const CTransaction& tx,
              REJECT_INVALID, "sidechain-creation");
     }
 
+    return true;
+}
+
+bool ScMgr::IsCertAllowedInMempool(const CTxMemPool& pool, const CScCertificate& cert, CValidationState& state)
+{
+    if (!checkCertificateInMemPool(pool, cert) )
+    {
+        return state.Invalid(error("transaction tries to create a certificate with no sc balance enough considering mempool"),
+             REJECT_INVALID, "sidechain-certificate");
+    }
+
+    return true;
+}
+
+bool ScMgr::checkCertificateInMemPool(const CTxMemPool& pool, const CScCertificate& cert)
+{
+    const uint256& certHash = cert.GetHash();
+
+    const uint256& scId = cert.scId;
+    const CAmount& certAmount = cert.totalAmount;
+ 
+    CAmount scBalance = getSidechainBalance(scId);
+    if (scBalance == -1)
+    {
+        // should not happen at this point due to previous checks
+        LogPrint("sc", "%s():%d - cert[%s]: scid[%s] not found\n",
+            __func__, __LINE__, certHash.ToString(), scId.ToString() );
+        return false;
+    }
+
+    LogPrint("sc", "%s():%d - scid consolidated balance: %s\n", __func__, __LINE__, FormatMoney(scBalance) );
+ 
+    for (auto it = pool.mapTx.begin(); it != pool.mapTx.end(); ++it)
+    {
+        const CTransaction& mpTx = it->second.GetTx();
+        if (mpTx.nVersion == SC_TX_VERSION)
+        {
+            BOOST_FOREACH(auto& ft, mpTx.vft_ccout)
+            {
+                if (scId == ft.scId)
+                {
+                    LogPrint("sc", "%s():%d - tx[%s]: fwd[%s]\n",
+                        __func__, __LINE__, mpTx.GetHash().ToString(), FormatMoney(ft.nValue) );
+                    scBalance += ft.nValue;
+                }
+            }
+        }
+    }
+ 
+    for (auto it = pool.mapCertificate.begin(); it != pool.mapCertificate.end(); ++it)
+    {
+        const CScCertificate& mpCert = it->second.GetCertificate();
+ 
+        if (scId == mpCert.scId)
+        {
+            LogPrint("sc", "%s():%d - tx[%s]: bwd[%s]\n",
+                __func__, __LINE__, mpCert.GetHash().ToString(), FormatMoney(mpCert.totalAmount) );
+            scBalance -= mpCert.totalAmount;
+        }
+    }
+ 
+    if (certAmount > scBalance)
+    {
+        LogPrint("sc", "%s():%d - invalid cert[%s]: scid[%s] has not balance enough: %s\n",
+            __func__, __LINE__, certHash.ToString(), scId.ToString(), FormatMoney(scBalance) );
+        return false;
+    }
     return true;
 }
 

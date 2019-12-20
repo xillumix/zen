@@ -161,7 +161,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     UniValue certs(UniValue::VARR);
     BOOST_FOREACH(const CScCertificate& cert, block.vcert)
     {
-#if 0 // TODO
+#if 0 // TODO cert: handle details flag in json representation
         if(txDetails)
         {
             UniValue objTx(UniValue::VOBJ);
