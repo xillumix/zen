@@ -275,7 +275,7 @@ bool ScMgr::checkCertSemanticValidity(const CScCertificate& cert, CValidationSta
         return state.DoS(100, error("invalid amount or fee"), REJECT_INVALID, "bad-cert-amount-or-fee");
     }
 
-    // TODO cert: add check on vbt_ccout
+    // TODO cert: add check on vbt_ccout whenever they have data
 
     return true;
 }

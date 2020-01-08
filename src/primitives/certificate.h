@@ -68,7 +68,6 @@ public:
             nonce == uint256() );
     }
 
-    CAmount GetValueOut() const override;
     CAmount GetFeeAmount(CAmount valueIn) const override;
 
     unsigned int CalculateSize() const override;
@@ -131,22 +130,16 @@ struct CMutableScCertificate : public CMutableTransactionBase
     uint256 GetHash() const override;
 };
 
-class CTxBackwardTransferCrosschainOut : public CTxOut
+// for the time being, this class is an empty place holder: attributes will be added in future as soon as they are designed
+class CTxBackwardTransferCrosschainOut
 {
 public:
-
-    CTxBackwardTransferCrosschainOut() { SetNull(); }
-
-    CTxBackwardTransferCrosschainOut( const CAmount& nValueIn, CScript addressIn):
-        CTxOut(nValueIn, addressIn) {}
 
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        // the parent slice
-        READWRITE(*static_cast<CTxOut*>(this) );
-        // any extensions go here
+        // any attributes go here
         //...
     }
 

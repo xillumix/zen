@@ -92,12 +92,7 @@ class headers(BitcoinTestFramework):
         self.nodes[0].dbg_log(s)
         self.nodes[1].dbg_log(s)
 
-        blocks.extend(self.nodes[0].generate(10)) # block height 1
-        print blocks[len(blocks)-1]
-
-        time.sleep(2)
-
-        blocks.extend(self.nodes[0].generate(10)) # block height 1
+        blocks.extend(self.nodes[0].generate(1)) # block height 1
         print blocks[len(blocks)-1]
 
         self.nodes[0].dbg_log("Before sync")

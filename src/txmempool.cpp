@@ -146,20 +146,22 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry,
     totalTxSize += entry.GetTxSize();
     cachedInnerUsage += entry.DynamicMemoryUsage();
     minerPolicyEstimator->processTransaction(entry, fCurrentEstimate);
+    LogPrint("cert", "%s():%d - tx [%s] added in mempool\n", __func__, __LINE__, hash.ToString() );
 
     return true;
 }
 
 bool CTxMemPool::addUnchecked(const uint256& hash, const CCertificateMemPoolEntry &entry, bool fCurrentEstimate)
 {
-    // TODO cert: use a separate cs
     LOCK(cs);
     mapCertificate[hash] = entry;
+    // no mapNextTx or mapNullifiers handling is necessary for certs since they have no inputs or joinsplits 
     nCertificatesUpdated++;
     totalCertificateSize += entry.GetCertificateSize();
     cachedInnerUsage += entry.DynamicMemoryUsage();
 // TODO cert: for the time being skip the part on policy estimator, certificates currently have maximum priority
 // minerPolicyEstimator->processTransaction(entry, fCurrentEstimate);
+    LogPrint("cert", "%s():%d - cert [%s] added in mempool\n", __func__, __LINE__, hash.ToString() );
     return true;
 }
 
@@ -237,6 +239,7 @@ void CTxMemPool::remove(const CTransaction &origTx, std::list<CTransaction>& rem
             removed.push_back(tx);
             totalTxSize -= mapTx[hash].GetTxSize();
             cachedInnerUsage -= mapTx[hash].DynamicMemoryUsage();
+            LogPrint("cert", "%s():%d - removing tx [%s] from mempool\n", __func__, __LINE__, hash.ToString() );
             mapTx.erase(hash);
             nTransactionsUpdated++;
             minerPolicyEstimator->removeTx(hash);
@@ -727,6 +730,15 @@ bool CCoinsViewMemPool::HaveCoins(const uint256 &txid) const {
 
 size_t CTxMemPool::DynamicMemoryUsage() const {
     LOCK(cs);
+#if 0
     return memusage::DynamicUsage(mapTx) + memusage::DynamicUsage(mapNextTx) + memusage::DynamicUsage(mapDeltas) + cachedInnerUsage;
+#else
+    return
+        ( memusage::DynamicUsage(mapTx) +
+          memusage::DynamicUsage(mapNextTx) +
+          memusage::DynamicUsage(mapDeltas) +
+          memusage::DynamicUsage(mapCertificate) +
+          cachedInnerUsage);
+#endif
 }
 

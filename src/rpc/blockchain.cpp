@@ -645,7 +645,12 @@ UniValue gettxout(const UniValue& params, bool fHelp)
     ScriptPubKeyToJSON(coins.vout[n].scriptPubKey, o, true);
     ret.push_back(Pair("scriptPubKey", o));
     ret.push_back(Pair("version", coins.nVersion));
+#if 0
     ret.push_back(Pair("coinbase", coins.fCoinBase));
+#else
+    ret.push_back(Pair("certificate", coins.IsCoinCertified()));
+    ret.push_back(Pair("coinbase", coins.IsCoinBase()));
+#endif
 
     return ret;
 }

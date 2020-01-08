@@ -1341,7 +1341,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
 
     // Silently drop pre-chainsplit transactions
     if (!ForkManager::getInstance().isAfterChainsplit(chainActive.Tip()->nHeight))
+    {
+        LogPrint("cert", "%s():%d - Dropping txid[%s]: chain height[%d] is before chain split\n",
+            __func__, __LINE__, tx.GetHash().ToString(), chainActive.Tip()->nHeight);
         return false;
+    }
 
     // Coinbase is only valid in a block, not as a loose transaction
 #if 0
@@ -1432,8 +1436,12 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         
         CAmount nValueIn = 0;
 
-        // TODO cert: move this in a virtual method, certificates do not have to check coins, but have sort of this instead:
-        //     nValueIn = cert.totalAmount;
+        if (!tx.CheckInputs(nValueIn, pool, view, pcoinsTip, pfMissingInputs, state))
+        {
+            return false;
+        }
+
+#if 0 // moved in transaction
         {
             LOCK(pool.cs);
             CCoinsViewMemPool viewMemPool(pcoinsTip, pool);
@@ -1447,7 +1455,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             }
  
             // do all inputs exist?
-#if 0
             // Note that this does not check for the presence of actual outputs (see the next check for that),
             // and only helps with filling in pfMissingInputs (to determine missing vs spent).
             BOOST_FOREACH(const CTxIn txin, tx.vin)
@@ -1462,19 +1469,9 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
                     return false;
                 }
             }
-#else
-            if (!tx.CheckMissingInputs(view, pfMissingInputs) )
-            {
-                return false;
-            }
-#endif
  
             // are the actual inputs available?
-#if 0
             if (!view.HaveInputs(tx))
-#else
-            if (!tx.HaveInputs(view))
-#endif
             {
                 LogPrintf("%s():%d - tx[%s]\n", __func__, __LINE__, tx.GetHash().ToString());
                 return state.Invalid(error("AcceptToMemoryPool: inputs already spent"),
@@ -1482,35 +1479,23 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             }
  
             // are the joinsplit's requirements met?
-#if 0
             if (!view.HaveJoinSplitRequirements(tx))
-#else
-            if (!tx.HaveJoinSplitRequirements(view))
-#endif
                 return state.Invalid(error("AcceptToMemoryPool: joinsplit requirements not met"),
                                      REJECT_DUPLICATE, "bad-txns-joinsplit-requirements-not-met");
  
             // Bring the best block into scope
             view.GetBestBlock();
-#if 0 
             nValueIn = view.GetValueIn(tx);
-#else
-            nValueIn = tx.GetValueIn(view);
-#endif
  
             // we have all inputs cached now, so switch back to dummy, so we don't need to keep lock on mempool
             view.SetBackend(dummy);
         }
-
         // Check for non-standard pay-to-script-hash in inputs
-#if 0
         if (getRequireStandard() && !AreInputsStandard(tx, view))
-#else
-        if (getRequireStandard() && !tx.AreInputsStandard(view))
-#endif
         {
             return error("AcceptToMemoryPool: nonstandard transaction input");
         }
+#endif// end move in transaction
 
         // Check that the transaction doesn't have an excessive number of
         // sigops, making it impossible to mine. Since the coinbase transaction

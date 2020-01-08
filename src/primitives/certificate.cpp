@@ -47,18 +47,6 @@ void CScCertificate::UpdateHash() const
     *const_cast<uint256*>(&hash) = SerializeHash(*this);
 }
 
-CAmount CScCertificate::GetValueOut() const
-{
-    CAmount nValueOut = 0;
-    for (std::vector<CTxOut>::const_iterator it(vout.begin()); it != vout.end(); ++it)
-    {
-        nValueOut += it->nValue;
-        if (!MoneyRange(it->nValue) || !MoneyRange(nValueOut))
-            throw std::runtime_error("CScCertificate::GetValueOut(): value out of range");
-    }
-    return nValueOut;
-}
-
 CAmount CScCertificate::GetFeeAmount(CAmount /* unused */) const
 {
     return (totalAmount - GetValueOut());
@@ -67,7 +55,7 @@ CAmount CScCertificate::GetFeeAmount(CAmount /* unused */) const
 unsigned int CScCertificate::CalculateSize() const
 {
     unsigned int sz = ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION);
-    LogPrint("cert", "%s():%d -sz=%u\n", __func__, __LINE__, sz);
+//    LogPrint("cert", "%s():%d -sz=%u\n", __func__, __LINE__, sz);
     return sz;
 }
 
@@ -150,7 +138,7 @@ double CScCertificate::GetPriority(const CCoinsViewCache &view, int nHeight) con
 // in zen-tx binary build configuration
 #ifdef BITCOIN_TX
 void CScCertificate::SyncWithWallets(const CBlock* pblock) const { return; }
-bool CScCertificate::Check(CValidationState& state, libzcash::ProofVerifier& /*unused*/) const { return true; }
+bool CScCertificate::Check(CValidationState& state, libzcash::ProofVerifier&) const { return true; }
 bool CScCertificate::IsApplicableToState() const { return true; }
 bool CScCertificate::IsStandard(std::string& reason, int nHeight) const { return true; }
 bool CScCertificate::IsAllowedInMempool(CValidationState& state, const CTxMemPool& pool) const { return true; }

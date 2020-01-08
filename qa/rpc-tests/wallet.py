@@ -168,7 +168,6 @@ class WalletTest (BitcoinTestFramework):
         txid2 = self.nodes[1].sendtoaddress(self.nodes[0].getnewaddress(), 1)
         sync_mempools(self.nodes)
 
-        #raw_input("Press enter to continue...")
         self.nodes.append(start_node(3, self.options.tmpdir))
         connect_nodes_bi(self.nodes, 0, 3)
         sync_blocks(self.nodes)
@@ -225,7 +224,7 @@ class WalletTest (BitcoinTestFramework):
         self.sync_all()
 
         txIdNotBroadcasted  = self.nodes[0].sendtoaddress(self.nodes[2].getnewaddress(), 2);
-        print "tx = ", txIdNotBroadcasted
+        #print "tx = ", txIdNotBroadcasted
         #raw_input("Press enter to continue...")
         txObjNotBroadcasted = self.nodes[0].gettransaction(txIdNotBroadcasted)
         self.sync_all()

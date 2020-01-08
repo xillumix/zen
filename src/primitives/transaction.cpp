@@ -298,6 +298,18 @@ CTransactionBase::CTransactionBase(const CTransactionBase &tx) : nVersion(TRANSP
     *const_cast<std::vector<CTxOut>*>(&vout) = tx.vout;
 }
 
+CAmount CTransactionBase::GetValueOut() const
+{
+    CAmount nValueOut = 0;
+    for (std::vector<CTxOut>::const_iterator it(vout.begin()); it != vout.end(); ++it)
+    {
+        nValueOut += it->nValue;
+        if (!MoneyRange(it->nValue) || !MoneyRange(nValueOut))
+            throw std::runtime_error("CTransactionBase::GetValueOut(): value out of range");
+    }
+    return nValueOut;
+}
+
 bool CTransactionBase::CheckVout(CAmount& nValueOut, CValidationState &state) const
 {
     // Check for negative or overflow output values
@@ -347,7 +359,6 @@ CTransaction& CTransaction::operator=(const CTransaction &tx) {
     *const_cast<std::vector<JSDescription>*>(&vjoinsplit) = tx.vjoinsplit;
     *const_cast<uint256*>(&joinSplitPubKey) = tx.joinSplitPubKey;
     *const_cast<joinsplit_sig_t*>(&joinSplitSig) = tx.joinSplitSig;
-//    *const_cast<uint256*>(&hash) = tx.hash;
     return *this;
 }
 
@@ -399,13 +410,8 @@ double CTransaction::ComputePriority(double dPriorityInputs, unsigned int nTxSiz
 
 CAmount CTransaction::GetValueOut() const
 {
-    CAmount nValueOut = 0;
-    for (std::vector<CTxOut>::const_iterator it(vout.begin()); it != vout.end(); ++it)
-    {
-        nValueOut += it->nValue;
-        if (!MoneyRange(it->nValue) || !MoneyRange(nValueOut))
-            throw std::runtime_error("CTransaction::GetValueOut(): value out of range");
-    }
+    // vout
+    CAmount nValueOut = CTransactionBase::GetValueOut();
 
     for (std::vector<JSDescription>::const_iterator it(vjoinsplit.begin()); it != vjoinsplit.end(); ++it)
     {
@@ -467,10 +473,10 @@ bool CTransaction::IsValidLoose() const
 unsigned int CTransaction::CalculateSize() const
 {
     unsigned int sz = ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION);
-    LogPrint("cert", "%s():%d -sz=%u\n", __func__, __LINE__, sz);
+//    LogPrint("cert", "%s():%d -sz=%u\n", __func__, __LINE__, sz);
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << *this;
-    LogPrint("cert", "%s():%d -hex=%s\n", __func__, __LINE__, HexStr(ss.begin(), ss.end()) );
+//    LogPrint("cert", "%s():%d -hex=%s\n", __func__, __LINE__, HexStr(ss.begin(), ss.end()) );
     return sz;
 }
 
@@ -566,6 +572,8 @@ bool CTransaction::HaveInputs(const CCoinsViewCache& view) const { return true; 
 void CTransaction::UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const { return; }
 void CTransaction::UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo &undo, int nHeight) const { return; }
 bool CTransaction::AreInputsStandard(CCoinsViewCache& view) const { return true; }
+bool CTransaction::CheckInputs(CAmount& nValueIn, CTxMemPool& pool, CCoinsViewCache& view, CCoinsViewCache* pcoinsTip,
+        bool* pfMissingInputs, CValidationState &state) const { return true; }
 unsigned int CTransaction::GetP2SHSigOpCount(CCoinsViewCache& view) const { return 0; }
 unsigned int CTransaction::GetLegacySigOpCount() const { return 0; }
 bool CTransaction::ContextualCheckInputs(CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
@@ -830,6 +838,59 @@ void CTransaction::UpdateCoins(CValidationState &state, CCoinsViewCache& view, C
 bool CTransaction::AreInputsStandard(CCoinsViewCache& view) const 
 {
     return ::AreInputsStandard(*this, view); 
+}
+
+bool CTransaction::CheckInputs(CAmount& nValueIn, CTxMemPool& pool, CCoinsViewCache& view, CCoinsViewCache* pcoinsTip,
+        bool* pfMissingInputs, CValidationState &state) const
+{
+    {
+        LOCK(pool.cs);
+        CCoinsViewMemPool viewMemPool(pcoinsTip, pool);
+        view.SetBackend(viewMemPool);
+ 
+        // do we already have it?
+        if (view.HaveCoins(hash))
+        {
+            LogPrint("mempool", "Dropping txid %s : already have coins\n", hash.ToString());
+            return false;
+        }
+ 
+        // do all inputs exist?
+        if (!CheckMissingInputs(view, pfMissingInputs) )
+        {
+            return false;
+        }
+ 
+        // are the actual inputs available?
+        if (!HaveInputs(view))
+        {
+            LogPrintf("%s():%d - tx[%s]\n", __func__, __LINE__, GetHash().ToString());
+            return state.Invalid(error("AcceptToMemoryPool: inputs already spent"),
+                                 REJECT_DUPLICATE, "bad-txns-inputs-spent");
+        }
+ 
+        // are the joinsplit's requirements met?
+        if (!HaveJoinSplitRequirements(view))
+            return state.Invalid(error("AcceptToMemoryPool: joinsplit requirements not met"),
+                                 REJECT_DUPLICATE, "bad-txns-joinsplit-requirements-not-met");
+ 
+        // Bring the best block into scope
+        view.GetBestBlock();
+        nValueIn = GetValueIn(view);
+ 
+        // we have all inputs cached now, so switch back to dummy, so we don't need to keep lock on mempool
+        CCoinsView dummy;
+        view.SetBackend(dummy);
+    }
+
+    // Check for non-standard pay-to-script-hash in inputs
+    if (::getRequireStandard() && !AreInputsStandard(view))
+    {
+        return state.Invalid(error("AcceptToMemoryPool: nonstandard transaction input"),
+            REJECT_INVALID, "bad-txns-inputs-non-standard");
+    }
+
+    return true;
 }
 
 unsigned int CTransaction::GetP2SHSigOpCount(CCoinsViewCache& view) const 

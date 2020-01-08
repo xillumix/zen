@@ -671,13 +671,13 @@ public:
     bool CheckOutputsAreStandard(int nHeight, std::string& reason) const;
     bool CheckOutputsCheckBlockAtHeightOpCode(CValidationState& state) const;
 
-    //-----------------
-    // pure virtual interface 
+    // Return sum of txouts.
+    virtual CAmount GetValueOut() const;
 
+    //-----------------
+    // pure virtual interfaces 
     virtual bool IsNull() const = 0;
 
-    // Return sum of txouts.
-    virtual CAmount GetValueOut() const = 0;
     // return fee amount
     virtual CAmount GetFeeAmount(CAmount valueIn) const = 0;
 
@@ -727,10 +727,12 @@ public:
     virtual bool CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const { return true; };
     virtual bool HasNoInputsInMempool(const CTxMemPool& pool) const { return true; }
     virtual bool AreInputsStandard(CCoinsViewCache& view) const { return true; }
+    virtual bool CheckInputs(CAmount& nValueIn, CTxMemPool& pool, CCoinsViewCache& view, CCoinsViewCache* pcoinsTip,
+        bool* pfMissingInputs, CValidationState &state) const { return true; }
 
     virtual bool ContextualCheckInputs(CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
-       const CChain& chain, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams,
-       std::vector<CScriptCheck> *pvChecks = NULL) const { return true; }
+        const CChain& chain, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams,
+        std::vector<CScriptCheck> *pvChecks = NULL) const { return true; }
 
     virtual unsigned int GetP2SHSigOpCount(CCoinsViewCache& view) const { return 0; }
     virtual unsigned int GetLegacySigOpCount() const { return 0; }
@@ -962,6 +964,8 @@ public:
     void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const override;
     void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const override;
     bool AreInputsStandard(CCoinsViewCache& view) const override;
+    bool CheckInputs(CAmount& nValueIn, CTxMemPool& pool, CCoinsViewCache& view, CCoinsViewCache* pcoinsTip,
+        bool* pfMissingInputs, CValidationState &state) const override;
     bool ContextualCheckInputs(CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
                            const CChain& chain, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams,
                            std::vector<CScriptCheck> *pvChecks = NULL) const override;
