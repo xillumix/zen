@@ -76,6 +76,10 @@ public:
     std::string EncodeHex() const override;
     std::string ToString() const override;
 
+    bool AddUncheckedToMemPool(CTxMemPool* pool,
+        const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool poolHasNoInputsOf, bool fCurrentEstimate
+    ) const override;
+
     void AddToBlock(CBlock* pblock) const override; 
     void AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int /* not used sigops */) const override;
 

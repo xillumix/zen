@@ -9,6 +9,7 @@
 #include "utilmoneystr.h"
 #include "consensus/validation.h"
 #include "sc/sidechain.h"
+#include "txmempool.h"
 
 CScCertificate::CScCertificate() : CTransactionBase(), scId(), totalAmount(), vbt_ccout(), nonce() { }
 
@@ -137,12 +138,24 @@ double CScCertificate::GetPriority(const CCoinsViewCache &view, int nHeight) con
 // need linking all of the related symbols. We use this macro as it is already defined with a similar purpose
 // in zen-tx binary build configuration
 #ifdef BITCOIN_TX
+bool CScCertificate::AddUncheckedToMemPool(CTxMemPool* pool,
+    const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool, bool fCurrentEstimate
+) const { return true; }
+
 void CScCertificate::SyncWithWallets(const CBlock* pblock) const { return; }
 bool CScCertificate::Check(CValidationState& state, libzcash::ProofVerifier&) const { return true; }
 bool CScCertificate::IsApplicableToState() const { return true; }
 bool CScCertificate::IsStandard(std::string& reason, int nHeight) const { return true; }
 bool CScCertificate::IsAllowedInMempool(CValidationState& state, const CTxMemPool& pool) const { return true; }
 #else
+bool CScCertificate::AddUncheckedToMemPool(CTxMemPool* pool,
+    const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool /*unused*/, bool fCurrentEstimate
+) const
+{
+    CCertificateMemPoolEntry entry( *this, nFee, GetTime(), dPriority, nHeight);
+    return pool->addUnchecked(GetHash(), entry, fCurrentEstimate);
+}
+
 void CScCertificate::SyncWithWallets(const CBlock* pblock) const
 {
     LogPrint("cert", "%s():%d - sync with wallet cert[%s]\n", __func__, __LINE__, GetHash().ToString());

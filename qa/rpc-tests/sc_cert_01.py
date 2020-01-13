@@ -63,6 +63,7 @@ class headers(BitcoinTestFramework):
         print msg
         self.nodes[0].dbg_log(msg)
         self.nodes[1].dbg_log(msg)
+        self.nodes[2].dbg_log(msg)
 
     def run_test(self):
 
@@ -146,8 +147,8 @@ class headers(BitcoinTestFramework):
             print errorString
             assert(False)
 
-        #self.sync_all()
-        time.sleep(1)
+        self.sync_all()
+        #time.sleep(1)
 
         print "\nChecking mempools..."
         print "Node 0: ", self.nodes[0].getrawmempool()
@@ -159,28 +160,151 @@ class headers(BitcoinTestFramework):
         print("\nNode0 generating 1 honest block")
         blocks.extend(self.nodes[0].generate(1))
         self.sync_all()
+
+        print blocks[-1]
+        print self.nodes[0].getblock(blocks[-1], True)
         #time.sleep(1)
 
-        print "Node0 balance: ", self.nodes[0].getbalance("", 0)
-        print "Node1 balance: ", self.nodes[1].getbalance("", 0)
-        print "Node2 balance: ", self.nodes[2].getbalance("", 0)
+#        print "Node0 balance: ", self.nodes[0].getbalance("", 0)
+#        print "Node1 balance: ", self.nodes[1].getbalance("", 0)
+#        print "Node2 balance: ", self.nodes[2].getbalance("", 0)
 
         self.mark_logs("\nNode 1 sends "+str(bwt_amount/2)+" coins to node2...")
         tx = self.nodes[1].sendtoaddress(self.nodes[2].getnewaddress(), bwt_amount/2)
+        print "this tx uses certificate as input:"
+        print "tx = ", tx
+        print
 
         # check that input is formed using the certificate
         vin = self.nodes[1].getrawtransaction(tx, 1)['vin']
         assert_equal(vin[0]['txid'], cert)
+        self.sync_all()
+
+        print "\nChecking mempools..."
+        print "Node 0: ", self.nodes[0].getrawmempool()
+        print "Node 1: ", self.nodes[1].getrawmempool()
+        print "Node 2: ", self.nodes[2].getrawmempool()
 
         print("\nNode0 generating 1 honest block")
         blocks.extend(self.nodes[0].generate(1))
         self.sync_all()
+
+        print blocks[-1]
+        print self.nodes[0].getblock(blocks[-1], True)
         #time.sleep(1)
 
         print "Node0 balance: ", self.nodes[0].getbalance("", 0)
         print "Node1 balance: ", self.nodes[1].getbalance("", 0)
         print "Node2 balance: ", self.nodes[2].getbalance("", 0)
         print
+
+        print "\nSC info:\n", pprint.pprint(self.nodes[0].getscinfo(scid))
+        print "\nSC info:\n", pprint.pprint(self.nodes[1].getscinfo(scid))
+        print "\nSC info:\n", pprint.pprint(self.nodes[2].getscinfo(scid))
+        print
+
+#        raw_input("press enter to invalidate..")
+        invalidating = self.nodes[0].getbestblockhash()
+        self.mark_logs("\nNode 0 invalidates last block...")
+        print "Invalidating: ", invalidating
+        self.nodes[0].invalidateblock(invalidating)
+        time.sleep(1)
+       
+        print "\nChecking mempools..."
+        print "Node 0: ", self.nodes[0].getrawmempool()
+        print "Node 1: ", self.nodes[1].getrawmempool()
+        print "Node 2: ", self.nodes[2].getrawmempool()
+
+#        raw_input("press enter to invalidate..")
+        invalidating = self.nodes[0].getbestblockhash()
+        self.mark_logs("\nNode 0 invalidates last block...")
+        self.nodes[0].invalidateblock(invalidating)
+        print "Invalidating: ", invalidating
+        time.sleep(1)
+       
+        print "\nChecking mempools..."
+        print "Node 0: ", self.nodes[0].getrawmempool()
+        print "Node 1: ", self.nodes[1].getrawmempool()
+        print "Node 2: ", self.nodes[2].getrawmempool()
+
+        print "Node0 balance: ", self.nodes[0].getbalance("", 0)
+        print "Node1 balance: ", self.nodes[1].getbalance("", 0)
+        print "Node2 balance: ", self.nodes[2].getbalance("", 0)
+        print
+
+        print "\nSC info:\n", pprint.pprint(self.nodes[0].getscinfo(scid))
+        print "\nSC info:\n", pprint.pprint(self.nodes[1].getscinfo(scid))
+        print "\nSC info:\n", pprint.pprint(self.nodes[2].getscinfo(scid))
+        print
+
+#        raw_input("press enter to generate 6 blocks..")
+        self.mark_logs("\nNode 0 generating...")
+        print("\nNode0 generating 6 blocks")
+        blocks.extend(self.nodes[0].generate(6))
+        self.sync_all()
+
+        print "Node0 balance: ", self.nodes[0].getbalance("", 0)
+        print "Node1 balance: ", self.nodes[1].getbalance("", 0)
+        print "Node2 balance: ", self.nodes[2].getbalance("", 0)
+        print
+
+        print "\nSC info:\n", pprint.pprint(self.nodes[0].getscinfo(scid))
+        print "\nSC info:\n", pprint.pprint(self.nodes[1].getscinfo(scid))
+        print "\nSC info:\n", pprint.pprint(self.nodes[2].getscinfo(scid))
+        print
+
+#        raw_input("press enter to invalidate SC owner block..")
+        self.mark_logs("\nNode 1 invalidates owner block...")
+        self.nodes[1].invalidateblock(ownerBlock)
+        print "Invalidating: ", ownerBlock
+        time.sleep(1)
+       
+        print "\nChecking mempools..."
+        print "Node 0: ", self.nodes[0].getrawmempool()
+        print "Node 1: ", self.nodes[1].getrawmempool()
+        print "Node 2: ", self.nodes[2].getrawmempool()
+
+        print "Node0 balance: ", self.nodes[0].getbalance("", 0)
+        print "Node1 balance: ", self.nodes[1].getbalance("", 0)
+        print "Node2 balance: ", self.nodes[2].getbalance("", 0)
+        print
+
+        print "\nSC info:\n", pprint.pprint(self.nodes[0].getscinfo(scid))
+
+        try:
+            print "\nSC info:\n", pprint.pprint(self.nodes[1].getscinfo(scid))
+        except JSONRPCException,e:
+            errorString = e.error['message']
+            print errorString
+
+        print "\nSC info:\n", pprint.pprint(self.nodes[2].getscinfo(scid))
+        print
+
+#        raw_input("press enter to re-generate all..")
+        print("\nNode1 generating 36 blocks")
+        blocks.extend(self.nodes[1].generate(36))
+        time.sleep(6)
+        #self.sync_all()
+
+        print "Node0 balance: ", self.nodes[0].getbalance("", 0)
+        print "Node1 balance: ", self.nodes[1].getbalance("", 0)
+        print "Node2 balance: ", self.nodes[2].getbalance("", 0)
+        print
+
+        print "\nChecking mempools..."
+        print "Node 0: ", self.nodes[0].getrawmempool()
+        print "Node 1: ", self.nodes[1].getrawmempool()
+        print "Node 2: ", self.nodes[2].getrawmempool()
+
+        print "\nSC info:\n", pprint.pprint(self.nodes[0].getscinfo(scid))
+        print "\nSC info:\n", pprint.pprint(self.nodes[1].getscinfo(scid))
+        print "\nSC info:\n", pprint.pprint(self.nodes[2].getscinfo(scid))
+        print
+
+        print 
+        for i in range(0, 3):
+            self.dump_ordered_tips(self.nodes[i].getchaintips())
+            print "---"
 
 
 

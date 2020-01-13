@@ -3692,7 +3692,11 @@ DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
 }
 
 
+#if 0
 DBErrors CWallet::ZapWalletTx(std::vector<CWalletTx>& vWtx)
+#else
+DBErrors CWallet::ZapWalletTx(std::vector<std::shared_ptr<CWalletObjBase> >& vWtx)
+#endif
 {
     if (!fFileBacked)
         return DB_LOAD_OK;

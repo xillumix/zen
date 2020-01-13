@@ -1120,9 +1120,12 @@ public:
      */
     std::map<uint256, JSOutPoint> mapNullifiersToNotes;
 
+#if 0
+    std::map<uint256, CWalletTx> mapWallet;
+#else
     std::map<uint256, std::shared_ptr<CWalletObjBase> > mapWallet;
     typedef std::map<uint256, std::shared_ptr<CWalletObjBase> >::const_iterator MAP_WALLET_CONST_IT;
-//    std::map<uint256, CWalletCert> mapWalletCert;
+#endif
 
     int64_t nOrderPosNext;
     std::map<uint256, int> mapRequestCount;
@@ -1343,7 +1346,12 @@ public:
     void SetBestChain(const CBlockLocator& loc) override;
 
     DBErrors LoadWallet(bool& fFirstRunRet);
+#if 0
     DBErrors ZapWalletTx(std::vector<CWalletTx>& vWtx);
+#else
+    DBErrors ZapWalletTx(std::vector<std::shared_ptr<CWalletObjBase> >& vWtx);
+#endif
+
 
     bool SetAddressBook(const CTxDestination& address, const std::string& strName, const std::string& purpose);
 

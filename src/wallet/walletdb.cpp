@@ -64,8 +64,8 @@ bool CWalletDB::WriteTx(uint256 hash, const CWalletTx& wtx)
 #else
 bool CWalletDB::WriteTx(uint256 hash, const CWalletObjBase& obj)
 {
-    LogPrint("cert", "%s():%d - called for %s[%s], writing to db\n", __func__, __LINE__,
-        obj.IsCoinCertified()?"cert":"tx", obj.GetHash().ToString());
+//    LogPrint("cert", "%s():%d - called for %s[%s], writing to db\n", __func__, __LINE__,
+//        obj.IsCoinCertified()?"cert":"tx", obj.GetHash().ToString());
     
     nWalletDBUpdated++;
 
@@ -73,6 +73,7 @@ bool CWalletDB::WriteTx(uint256 hash, const CWalletObjBase& obj)
     {
         if (obj.IsCoinCertified() )
         {
+            LogPrint("cert", "%s():%d - called for cert[%s], writing to db\n", __func__, __LINE__, obj.GetHash().ToString());
             return Write(std::make_pair(std::string("cert"), hash), dynamic_cast<const CWalletCert&>(obj));
         }
         else
@@ -932,7 +933,11 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
     return result;
 }
 
+#if 0
 DBErrors CWalletDB::FindWalletTx(CWallet* pwallet, vector<uint256>& vTxHash, vector<CWalletTx>& vWtx)
+#else
+DBErrors CWalletDB::FindWalletTx(CWallet* pwallet, std::vector<uint256>& vTxHash, std::vector<std::shared_ptr<CWalletObjBase> >& vWtx)
+#endif
 {
     pwallet->vchDefaultKey = CPubKey();
     bool fNoncriticalErrors = false;
@@ -980,7 +985,23 @@ DBErrors CWalletDB::FindWalletTx(CWallet* pwallet, vector<uint256>& vTxHash, vec
                 ssValue >> wtx;
 
                 vTxHash.push_back(hash);
+#if 0
                 vWtx.push_back(wtx);
+#else
+                vWtx.push_back(std::shared_ptr<CWalletObjBase>(new CWalletTx(wtx)));
+            }
+            else
+            if (strType == "cert") {
+                uint256 hash;
+                ssKey >> hash;
+
+                CWalletCert wcert;
+                ssValue >> wcert;
+
+                vTxHash.push_back(hash);
+                vWtx.push_back(std::shared_ptr<CWalletObjBase>(new CWalletCert(wcert)));
+                LogPrint("cert", "%s():%d - adding cert[%s] to vec\n", __func__, __LINE__, hash.ToString());
+#endif
             }
         }
         pcursor->close();
@@ -998,7 +1019,11 @@ DBErrors CWalletDB::FindWalletTx(CWallet* pwallet, vector<uint256>& vTxHash, vec
     return result;
 }
 
+#if 0
 DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, vector<CWalletTx>& vWtx)
+#else
+DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, std::vector<std::shared_ptr<CWalletObjBase> >& vWtx)
+#endif
 {
     // build list of wallet TXs
     vector<uint256> vTxHash;

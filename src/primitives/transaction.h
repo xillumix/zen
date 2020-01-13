@@ -690,6 +690,10 @@ public:
     virtual std::string EncodeHex() const = 0;
     virtual std::string ToString() const = 0;
 
+    virtual bool AddUncheckedToMemPool(CTxMemPool* pool, 
+        const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool poolHasNoInputsOf, bool fCurrentEstimate
+    ) const = 0;
+
     virtual void AddToBlock(CBlock* pblock) const = 0;
     virtual void AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int sigops) const = 0;
 
@@ -943,6 +947,10 @@ public:
     }
 
   public:
+    bool AddUncheckedToMemPool(CTxMemPool* pool, 
+        const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool poolHasNoInputsOf, bool fCurrentEstimate
+    ) const override;
+
     void AddToBlock(CBlock* pblock) const override;
     void AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int sigops) const override;
     CAmount GetJoinSplitValueIn() const override;

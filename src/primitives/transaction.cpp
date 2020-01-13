@@ -551,6 +551,9 @@ void CTransaction::getCrosschainOutputs(std::map<uint256, std::vector<uint256> >
 bool CTransactionBase::CheckOutputsAreStandard(int nHeight, std::string& reason) const { return true; }
 bool CTransactionBase::CheckOutputsCheckBlockAtHeightOpCode(CValidationState& state) const { return true; }
 
+bool CTransaction::AddUncheckedToMemPool(CTxMemPool* pool,
+    const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool poolHasNoInputsOf, bool fCurrentEstimate
+) const { return true; }
 void CTransaction::AddToBlock(CBlock* pblock) const { return; }
 void CTransaction::AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int sigops) const {return; }
 CAmount CTransaction::GetValueIn(const CCoinsViewCache& view) const { return 0; }
@@ -663,6 +666,14 @@ bool CTransactionBase::CheckOutputsCheckBlockAtHeightOpCode(CValidationState& st
         }
     }
     return true;
+}
+
+bool CTransaction::AddUncheckedToMemPool(CTxMemPool* pool,
+    const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool poolHasNoInputsOf, bool fCurrentEstimate
+) const
+{
+    CTxMemPoolEntry entry( *this, nFee, GetTime(), dPriority, nHeight, poolHasNoInputsOf);
+    return pool->addUnchecked(GetHash(), entry, fCurrentEstimate);
 }
 
 void CTransaction::AddToBlock(CBlock* pblock) const 
