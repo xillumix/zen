@@ -14,6 +14,7 @@
 // static global check methods, now called by CTransaction instances
 #include "main.h"
 #include "sc/sidechain.h"
+#include "sc/sidechainrpc.h"
 #include "consensus/validation.h"
 #include "validationinterface.h"
 #include "undo.h"
@@ -279,6 +280,24 @@ CMutableTransaction::CMutableTransaction(const CTransaction& tx) :
 uint256 CMutableTransaction::GetHash() const
 {
     return SerializeHash(*this);
+}
+
+bool CMutableTransaction::add(const CTxScCreationOut& out) 
+{
+    vsc_ccout.push_back(out);
+    return true;
+}
+
+bool CMutableTransaction::add(const CTxCertifierLockOut& out) 
+{
+    vcl_ccout.push_back(out);
+    return true;
+}
+
+bool CMutableTransaction::add(const CTxForwardTransferOut& out)
+{
+    vft_ccout.push_back(out);
+    return true;
 }
 
 //--------------------------------------------------------------------------------------------------------
@@ -551,6 +570,7 @@ void CTransaction::getCrosschainOutputs(std::map<uint256, std::vector<uint256> >
 bool CTransactionBase::CheckOutputsAreStandard(int nHeight, std::string& reason) const { return true; }
 bool CTransactionBase::CheckOutputsCheckBlockAtHeightOpCode(CValidationState& state) const { return true; }
 
+void CTransaction::RemoveFromMemPool(CTxMemPool* pool) const { return; } 
 bool CTransaction::AddUncheckedToMemPool(CTxMemPool* pool,
     const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool poolHasNoInputsOf, bool fCurrentEstimate
 ) const { return true; }
@@ -571,6 +591,7 @@ void CTransaction::UnspendNullifiers(CCoinsViewCache& view) const { return; }
 bool CTransaction::HaveJoinSplitRequirements(const CCoinsViewCache& view) const { return true; }
 void CTransaction::HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const { return; };
 void CTransaction::AddJoinSplitToJSON(UniValue& entry) const { return; }
+void CTransaction::AddSidechainOutsToJSON(UniValue& entry) const { return; }
 bool CTransaction::HaveInputs(const CCoinsViewCache& view) const { return true; }
 void CTransaction::UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const { return; }
 void CTransaction::UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo &undo, int nHeight) const { return; }
@@ -667,6 +688,12 @@ bool CTransactionBase::CheckOutputsCheckBlockAtHeightOpCode(CValidationState& st
     }
     return true;
 }
+
+void CTransaction::RemoveFromMemPool(CTxMemPool* mempool) const 
+{
+    std::list<CTransaction> removed;
+    mempool->remove(*this, removed, true);
+} 
 
 bool CTransaction::AddUncheckedToMemPool(CTxMemPool* pool,
     const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool poolHasNoInputsOf, bool fCurrentEstimate
@@ -827,6 +854,11 @@ void CTransaction::AddJoinSplitToJSON(UniValue& entry) const
     entry.push_back(Pair("vjoinsplit", TxJoinSplitToJSON(*this)));
 }
 
+void CTransaction::AddSidechainOutsToJSON(UniValue& entry) const
+{
+    Sidechain::AddSidechainOutsToJSON(*this, entry);
+}
+
 bool CTransaction::HaveInputs(const CCoinsViewCache& view) const
 {
     return view.HaveInputs(*this);
@@ -945,37 +977,7 @@ bool CTransaction::CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissi
 
 double CTransaction::GetPriority(const CCoinsViewCache &view, int nHeight) const
 {
-#if 0
-    if (IsCoinBase())
-    {
-        return 0.0;
-    }
-
-    // Joinsplits do not reveal any information about the value or age of a note, so we
-    // cannot apply the priority algorithm used for transparent utxos.  Instead, we just
-    // use the maximum priority whenever a transaction contains any JoinSplits.
-    // (Note that coinbase transactions cannot contain JoinSplits.)
-    // FIXME: this logic is partially duplicated between here and CreateNewBlock in miner.cpp.
-
-    if (getVjoinsplitSize() > 0) {
-        return MAX_PRIORITY;
-    }
-
-    double dResult = 0.0;
-    BOOST_FOREACH(const CTxIn& txin, vin)
-    {
-        const CCoins* coins = view.AccessCoins(txin.prevout.hash);
-        assert(coins);
-        if (!coins->IsAvailable(txin.prevout.n)) continue;
-        if (coins->nHeight < nHeight) {
-            dResult += coins->vout[txin.prevout.n].nValue * (nHeight-coins->nHeight);
-        }
-    }
-
-    return ComputePriority(dResult);
-#else
     return view.GetPriority(*this, nHeight);
-#endif
 }
 
 std::string CTransaction::EncodeHex() const

@@ -107,11 +107,11 @@ void WalletTxToJSON(const CWalletObjBase& wtx, UniValue& entry, isminefilter fil
         entry.push_back(Pair(item.first, item.second));
 
     // add the cross chain outputs if any
-    Sidechain::AddSidechainOutsToJSON(wtx, entry);
-
 #if 0
+    Sidechain::AddSidechainOutsToJSON(wtx, entry);
     entry.push_back(Pair("vjoinsplit", TxJoinSplitToJSON(wtx)));
 #else
+    wtx.AddSidechainOutsToJSON(entry);
     wtx.AddJoinSplitToJSON(entry);
 #endif
 }

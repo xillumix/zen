@@ -76,6 +76,8 @@ public:
     std::string EncodeHex() const override;
     std::string ToString() const override;
 
+    void RemoveFromMemPool(CTxMemPool* pool) const override; 
+
     bool AddUncheckedToMemPool(CTxMemPool* pool,
         const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool poolHasNoInputsOf, bool fCurrentEstimate
     ) const override;
@@ -96,6 +98,7 @@ public:
     void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const override;
 
     double GetPriority(const CCoinsViewCache &view, int nHeight) const override;
+    unsigned int GetLegacySigOpCount() const override;
 
     bool IsCoinCertified() const override { return true; }
 };

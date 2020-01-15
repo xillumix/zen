@@ -624,7 +624,7 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
         }
     }
 
-    // crosschain certifier locks TODO
+    // crosschain c.locks not handled 
 
     // crosschain forward transfers
     if (params.size() > 3 && !params[3].isNull())

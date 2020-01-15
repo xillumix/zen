@@ -32,6 +32,7 @@ using namespace std;
 using namespace Sidechain;
 
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
+extern void CertToJSON(const CScCertificate& cert, const uint256 hashBlock, UniValue& entry);
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fIncludeHex);
 
 double GetDifficultyINTERNAL(const CBlockIndex* blockindex, bool networkDifficulty)
@@ -161,16 +162,16 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     UniValue certs(UniValue::VARR);
     BOOST_FOREACH(const CScCertificate& cert, block.vcert)
     {
-#if 0 // TODO cert: handle details flag in json representation
         if(txDetails)
         {
-            UniValue objTx(UniValue::VOBJ);
-            TxToJSON(tx, uint256(), objTx);
-            txs.push_back(objTx);
+            UniValue objCert(UniValue::VOBJ);
+            CertToJSON(cert, uint256(), objCert);
+            certs.push_back(objCert);
         }
         else
-#endif
+        {
             certs.push_back(cert.GetHash().GetHex());
+        }
     }
     result.push_back(Pair("tx", txs));
     result.push_back(Pair("cert", certs));
@@ -1329,8 +1330,7 @@ UniValue dbg_do(const UniValue& params, bool fHelp)
             + HelpExampleCli("dbg_do", "\"todo\"")
         );
     }
-    std::string ret = "writing...";
-    GetMainSignals().SetBestChain(chainActive.GetLocator());
+    std::string ret = "TODO";
 
     return ret;
 }

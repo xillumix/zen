@@ -137,6 +137,9 @@ void GetBlockTxPriorityData(const CBlock *pblock, int nHeight, int64_t nMedianTi
          mi != mempool.mapTx.end(); ++mi)
     {
         const CTransaction& tx = mi->second.GetTx();
+#if 1
+        bool dependsOnCertificate = false;
+#endif
 
         int64_t nLockTimeCutoff = (STANDARD_LOCKTIME_VERIFY_FLAGS & LOCKTIME_MEDIAN_TIME_PAST)
                 ? nMedianTimePast
@@ -158,7 +161,20 @@ void GetBlockTxPriorityData(const CBlock *pblock, int nHeight, int64_t nMedianTi
         // Detect orphan transaction and its dependencies
         BOOST_FOREACH(const CTxIn& txin, tx.vin)
         {
+#if 0
             if (mempool.mapTx.count(txin.prevout.hash))
+#else
+            // in txmempool a tx input can not be a cert out, in other words they can not be in the same block
+            if (mempool.mapCertificate.count(txin.prevout.hash))
+            {
+                LogPrint("cert", "%s():%d - skipping txin of tx[%s] since s out of cert %s\n",
+                    __func__, __LINE__, tx.GetHash().ToString(), txin.prevout.hash.ToString() ); 
+                dependsOnCertificate = true;
+                break;
+            }
+            else
+            if (mempool.mapTx.count(txin.prevout.hash))
+#endif
             {
                 if (!porphan)
                 {
@@ -171,6 +187,15 @@ void GetBlockTxPriorityData(const CBlock *pblock, int nHeight, int64_t nMedianTi
                 nTotalIn += mempool.mapTx[txin.prevout.hash].GetTx().vout[txin.prevout.n].nValue;
             }
         }
+#if 1
+        if (dependsOnCertificate)
+        {
+            // this tx must not be added to vecPriority nor in the vOrphan
+            LogPrint("cert", "%s():%d - skipping tx[%s] since depends on cert in mempool\n",
+                __func__, __LINE__, tx.GetHash().ToString() ); 
+            continue;
+        }
+#endif
 
         if (!porphan)
         {
@@ -372,8 +397,7 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
         pblock->nTime = GetAdjustedTime();
         const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
 
-//        pblock->nVersion = ComputeBlockVersion(pindexPrev, chainparams.GetConsensus());
-        pblock->nVersion = CBlockHeader::SC_CERT_VERSION;
+        pblock->nVersion = ComputeBlockVersion(pindexPrev, chainparams.GetConsensus());
         // -regtest only: allow overriding block.nVersion with
         // -blockversion=N to test forking scenarios
         if (chainparams.MineBlocksOnDemand())
@@ -413,7 +437,7 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
         TxPriorityCompare comparer(fSortedByFee);
         std::make_heap(vecPriority.begin(), vecPriority.end(), comparer);
 
-        // TODO cert: for the time being, vecPriority contains certs beforehand and after them all txes
+        // TODO cert: vecPriority contains certs beforehand and after them all txes
         // considering certs having a higher priority than any possible tx.
         // An alogorithm for managing tx/cert priorities could be devised
         while (!vecPriority.empty())
@@ -501,6 +525,12 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn,  unsigned int nBlo
 #else
             CAmount valueIn = tx.GetValueIn(view);
             CAmount nTxFees = tx.GetFeeAmount(valueIn);
+            if (nTxFees < 0)
+            {
+                LogPrintf("%s():%d - tx=%s has a negative fee (fee=%s/valueOut=%s)\n",
+                    __func__, __LINE__, tx.GetHash().ToString(), FormatMoney(nTxFees), FormatMoney(tx.GetValueOut()));
+                continue;
+            }
 #endif
 
 #if 0

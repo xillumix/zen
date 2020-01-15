@@ -2144,7 +2144,8 @@ void RelayCertificate(const CScCertificate& cert, const CDataStream& ss)
             continue;
         LOCK(pnode->cs_filter);
 #if 0
-// TODO cert: handle a node filter for pushing inv
+// TODO cert: handle a node bloom filter for pushing inv
+// hint: add a virtual method in CBloomFilter or CTransactionBase passing filer along 
         if (pnode->pfilter)
         {
             if (pnode->pfilter->IsRelevantAndUpdate(cert))

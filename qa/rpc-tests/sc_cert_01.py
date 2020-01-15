@@ -95,7 +95,6 @@ class headers(BitcoinTestFramework):
         print "\nNode1 balance: ", self.nodes[1].getbalance("", 0)
 
         self.mark_logs("\nNode 1 creates the SC spending "+str(creation_amount)+" coins ...")
-#        raw_input("press enter to go on..")
         amounts = []
         amounts.append( {"address":"dada", "amount": creation_amount})
         creating_tx = self.nodes[1].sc_create(scid, 123, amounts);
@@ -203,7 +202,6 @@ class headers(BitcoinTestFramework):
         print "\nSC info:\n", pprint.pprint(self.nodes[2].getscinfo(scid))
         print
 
-#        raw_input("press enter to invalidate..")
         invalidating = self.nodes[0].getbestblockhash()
         self.mark_logs("\nNode 0 invalidates last block...")
         print "Invalidating: ", invalidating
@@ -215,7 +213,6 @@ class headers(BitcoinTestFramework):
         print "Node 1: ", self.nodes[1].getrawmempool()
         print "Node 2: ", self.nodes[2].getrawmempool()
 
-#        raw_input("press enter to invalidate..")
         invalidating = self.nodes[0].getbestblockhash()
         self.mark_logs("\nNode 0 invalidates last block...")
         self.nodes[0].invalidateblock(invalidating)
@@ -237,7 +234,6 @@ class headers(BitcoinTestFramework):
         print "\nSC info:\n", pprint.pprint(self.nodes[2].getscinfo(scid))
         print
 
-#        raw_input("press enter to generate 6 blocks..")
         self.mark_logs("\nNode 0 generating...")
         print("\nNode0 generating 6 blocks")
         blocks.extend(self.nodes[0].generate(6))
@@ -253,7 +249,6 @@ class headers(BitcoinTestFramework):
         print "\nSC info:\n", pprint.pprint(self.nodes[2].getscinfo(scid))
         print
 
-#        raw_input("press enter to invalidate SC owner block..")
         self.mark_logs("\nNode 1 invalidates owner block...")
         self.nodes[1].invalidateblock(ownerBlock)
         print "Invalidating: ", ownerBlock
@@ -280,7 +275,6 @@ class headers(BitcoinTestFramework):
         print "\nSC info:\n", pprint.pprint(self.nodes[2].getscinfo(scid))
         print
 
-#        raw_input("press enter to re-generate all..")
         print("\nNode1 generating 36 blocks")
         blocks.extend(self.nodes[1].generate(36))
         time.sleep(6)
@@ -305,7 +299,6 @@ class headers(BitcoinTestFramework):
         for i in range(0, 3):
             self.dump_ordered_tips(self.nodes[i].getchaintips())
             print "---"
-
 
 
 if __name__ == '__main__':

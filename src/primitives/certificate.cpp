@@ -50,6 +50,7 @@ void CScCertificate::UpdateHash() const
 
 CAmount CScCertificate::GetFeeAmount(CAmount /* unused */) const
 {
+    // this in principle might be a negative number, the caller must check if that is legal
     return (totalAmount - GetValueOut());
 }
 
@@ -93,11 +94,12 @@ void CScCertificate::AddToBlock(CBlock* pblock) const
     pblock->vcert.push_back(*this);
 }
 
-void CScCertificate::AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int /* not used sigops */) const
+void CScCertificate::AddToBlockTemplate(CBlockTemplate* pblocktemplate, CAmount fee, unsigned int sigops) const
 {
-    LogPrint("cert", "%s():%d - adding to block templ cert %s, fee=%s\n", __func__, __LINE__,
-        GetHash().ToString(), FormatMoney(fee));
+    LogPrint("cert", "%s():%d - adding to block templ cert %s, fee=%s, sigops=%u\n", __func__, __LINE__,
+        GetHash().ToString(), FormatMoney(fee), sigops);
     pblocktemplate->vCertFees.push_back(fee);
+    pblocktemplate->vCertSigOps.push_back(sigops);
 }
 
 void CScCertificate::UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const
@@ -107,10 +109,11 @@ void CScCertificate::UpdateCoins(CValidationState &state, CCoinsViewCache& view,
     UpdateCoins(state, view, dum, nHeight);
 }
 
-void CScCertificate::UpdateCoins(CValidationState &state, CCoinsViewCache& inputs, CBlockUndo& blockundo, int nHeight) const
+void CScCertificate::UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& unused, int nHeight) const
 {
+    // no inputs in cert, therefore no need to handle block undo
     LogPrint("cert", "%s():%d - adding coins for cert [%s]\n", __func__, __LINE__, GetHash().ToString());
-    inputs.ModifyCoins(GetHash())->FromTx(*this, nHeight);
+    view.ModifyCoins(GetHash())->FromTx(*this, nHeight);
 }
 
 
@@ -138,6 +141,8 @@ double CScCertificate::GetPriority(const CCoinsViewCache &view, int nHeight) con
 // need linking all of the related symbols. We use this macro as it is already defined with a similar purpose
 // in zen-tx binary build configuration
 #ifdef BITCOIN_TX
+void CScCertificate::RemoveFromMemPool(CTxMemPool* pool) const {return;} 
+
 bool CScCertificate::AddUncheckedToMemPool(CTxMemPool* pool,
     const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool, bool fCurrentEstimate
 ) const { return true; }
@@ -147,7 +152,13 @@ bool CScCertificate::Check(CValidationState& state, libzcash::ProofVerifier&) co
 bool CScCertificate::IsApplicableToState() const { return true; }
 bool CScCertificate::IsStandard(std::string& reason, int nHeight) const { return true; }
 bool CScCertificate::IsAllowedInMempool(CValidationState& state, const CTxMemPool& pool) const { return true; }
+unsigned int CScCertificate::GetLegacySigOpCount() const { return 0; }
 #else
+void CScCertificate::RemoveFromMemPool(CTxMemPool* mempool) const 
+{
+    mempool->remove(*this, true);
+} 
+
 bool CScCertificate::AddUncheckedToMemPool(CTxMemPool* pool,
     const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool /*unused*/, bool fCurrentEstimate
 ) const
@@ -209,6 +220,16 @@ bool CScCertificate::IsStandard(std::string& reason, int nHeight) const
 bool CScCertificate::IsAllowedInMempool(CValidationState& state, const CTxMemPool& pool) const
 {
     return Sidechain::ScMgr::instance().IsCertAllowedInMempool(pool, *this, state);
+}
+
+unsigned int CScCertificate::GetLegacySigOpCount() const 
+{
+    unsigned int nSigOps = 0;
+    BOOST_FOREACH(const CTxOut& txout, vout)
+    {
+        nSigOps += txout.scriptPubKey.GetSigOpCount(false);
+    }
+    return nSigOps;
 }
 #endif
 

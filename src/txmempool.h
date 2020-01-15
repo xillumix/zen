@@ -157,7 +157,7 @@ public:
 
     void remove(const CTransaction &tx, std::list<CTransaction>& removed, bool fRecursive = false);
 #if 1
-    void remove(const CScCertificate &cert, std::list<CScCertificate>& removed, bool fRecursive = false);
+    void remove(const CScCertificate &cert, bool fRecursive = false);
 #endif
     void removeWithAnchor(const uint256 &invalidRoot);
     void removeCoinbaseSpends(const CCoinsViewCache *pcoins, unsigned int nMemPoolHeight);

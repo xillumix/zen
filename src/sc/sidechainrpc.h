@@ -21,12 +21,12 @@ class ScInfo;
 class CRecipientHandler
 {
     private:
-       CMutableTransactionBase* tx;
+       CMutableTransactionBase* txBase;
        std::string& err;
 
     public:
-       CRecipientHandler(CMutableTransactionBase* txIn, std::string& errIn)
-           : tx(txIn), err(errIn) {}
+       CRecipientHandler(CMutableTransactionBase* objIn, std::string& errIn)
+           : txBase(objIn), err(errIn) {}
 
     bool visit(const CcRecipientVariant& rec);
 
@@ -62,11 +62,7 @@ class CcRecipientAmountVisitor : public boost::static_visitor<CAmount>
 };
 
 // used in get tx family of rpc commands
-#if 0
 void AddSidechainOutsToJSON (const CTransaction& tx, UniValue& parentObj);
-#else
-void AddSidechainOutsToJSON (const CTransactionBase& tx, UniValue& parentObj);
-#endif
 
 // used when creating a raw transaction with cc outputs
 bool AddSidechainCreationOutputs(UniValue& sc_crs, CMutableTransaction& rawTx, std::string& error);

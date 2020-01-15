@@ -690,6 +690,8 @@ public:
     virtual std::string EncodeHex() const = 0;
     virtual std::string ToString() const = 0;
 
+    virtual void RemoveFromMemPool(CTxMemPool* pool) const = 0; 
+
     virtual bool AddUncheckedToMemPool(CTxMemPool* pool, 
         const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool poolHasNoInputsOf, bool fCurrentEstimate
     ) const = 0;
@@ -709,6 +711,7 @@ public:
     virtual void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const = 0;
 
     virtual double GetPriority(const CCoinsViewCache &view, int nHeight) const = 0;
+    virtual unsigned int GetLegacySigOpCount() const = 0;
 
     //-----------------
     // default values for derived classes which do not support specific data structures
@@ -727,6 +730,7 @@ public:
     virtual bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const { return true; }
     virtual void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const { return; }
     virtual void AddJoinSplitToJSON(UniValue& entry) const { return; }
+    virtual void AddSidechainOutsToJSON(UniValue& entry) const {return; }
     virtual bool HaveInputs(const CCoinsViewCache& view) const { return true; }
     virtual bool CheckMissingInputs(const CCoinsViewCache &view, bool* pfMissingInputs) const { return true; };
     virtual bool HasNoInputsInMempool(const CTxMemPool& pool) const { return true; }
@@ -739,7 +743,6 @@ public:
         std::vector<CScriptCheck> *pvChecks = NULL) const { return true; }
 
     virtual unsigned int GetP2SHSigOpCount(CCoinsViewCache& view) const { return 0; }
-    virtual unsigned int GetLegacySigOpCount() const { return 0; }
     virtual size_t getVjoinsplitSize() const { return 0; }
     virtual const uint256 getJoinSplitPubKey() const { return uint256(); }
     virtual int GetComplexity() const { return 0; }
@@ -947,6 +950,7 @@ public:
     }
 
   public:
+    void RemoveFromMemPool(CTxMemPool* pool) const override; 
     bool AddUncheckedToMemPool(CTxMemPool* pool, 
         const CAmount& nFee, int64_t nTime, double dPriority, int nHeight, bool poolHasNoInputsOf, bool fCurrentEstimate
     ) const override;
@@ -968,6 +972,7 @@ public:
     bool HaveJoinSplitRequirements(const CCoinsViewCache& view) const override;
     void HandleJoinSplitCommittments(ZCIncrementalMerkleTree& tree) const override;
     void AddJoinSplitToJSON(UniValue& entry) const override;
+    void AddSidechainOutsToJSON(UniValue& entry) const override;
     bool HaveInputs(const CCoinsViewCache& view) const override;
     void UpdateCoins(CValidationState &state, CCoinsViewCache& view, int nHeight) const override;
     void UpdateCoins(CValidationState &state, CCoinsViewCache& view, CBlockUndo& txundo, int nHeight) const override;
@@ -997,6 +1002,15 @@ struct CMutableTransactionBase
      * fly, as opposed to GetHash() in CTransaction, which uses a cached result.
      */
     virtual uint256 GetHash() const = 0;
+
+    virtual bool add(const CTxOut& out)
+    { 
+        vout.push_back(out);
+        return true;
+    }
+    virtual bool add(const CTxScCreationOut& out) { return false; }
+    virtual bool add(const CTxCertifierLockOut& out) { return false; }
+    virtual bool add(const CTxForwardTransferOut& out) { return false; }
 };
 
 
@@ -1056,6 +1070,9 @@ struct CMutableTransaction : public CMutableTransactionBase
         return (nVersion == SC_TX_VERSION);
     }
 
+    bool add(const CTxScCreationOut& out) override;
+    bool add(const CTxCertifierLockOut& out) override;
+    bool add(const CTxForwardTransferOut& out) override;
 };
 
 #endif // BITCOIN_PRIMITIVES_TRANSACTION_H

@@ -169,29 +169,7 @@ bool CTxMemPool::addUnchecked(
     const CTransactionBase& tx, const CAmount& nFee, int64_t nTime, double dPriority, int nHeight,
     bool poolHasNoInputsOf, bool fCurrentEstimate)
 {
-#if 0
-    if (dynamic_cast<const CTransaction*>(&tx) )
-    {
-        CTxMemPoolEntry entry(
-            dynamic_cast<const CTransaction&>(tx), nFee, GetTime(), dPriority,
-            nHeight, poolHasNoInputsOf);
-        return addUnchecked(tx.GetHash(), entry, fCurrentEstimate);
-    }
-    else
-    if (dynamic_cast<const CScCertificate*>(&tx) )
-    {
-        CCertificateMemPoolEntry entry(
-            dynamic_cast<const CScCertificate&>(tx), nFee, GetTime(), dPriority, nHeight);
-        return addUnchecked(tx.GetHash(), entry, fCurrentEstimate);
-    }
-    else
-    {
-        LogPrint("mempool", "%s():%d - ERROR: illegal tx=%s\n", __func__, __LINE__, tx.GetHash().ToString() );
-        return false;
-    }
-#else
     return tx.AddUncheckedToMemPool(this, nFee, nTime, dPriority, nHeight, poolHasNoInputsOf, fCurrentEstimate);
-#endif
 }
 
 void CTxMemPool::remove(const CTransaction &origTx, std::list<CTransaction>& removed, bool fRecursive)
@@ -247,13 +225,11 @@ void CTxMemPool::remove(const CTransaction &origTx, std::list<CTransaction>& rem
     }
 }
 
-void CTxMemPool::remove(const CScCertificate &origCert, std::list<CScCertificate>& removed, bool fRecursive)
+void CTxMemPool::remove(const CScCertificate &origCert, bool fRecursive)
 {
     // Remove certificate from memory pool
     {
         LOCK(cs);
-#if 1
-// TODO cert: check this handling of certificates children (normal txes) recursively
         std::deque<uint256> objToRemove;
         objToRemove.push_back(origCert.GetHash());
         if (fRecursive && !mapCertificate.count(origCert.GetHash())) {
@@ -291,7 +267,6 @@ void CTxMemPool::remove(const CScCertificate &origCert, std::list<CScCertificate
                     }
                 }
  
-//                removed.push_back(tx);
                 totalTxSize -= mapTx[hash].GetTxSize();
                 cachedInnerUsage -= mapTx[hash].DynamicMemoryUsage();
                 mapTx.erase(hash);
@@ -303,7 +278,8 @@ void CTxMemPool::remove(const CScCertificate &origCert, std::list<CScCertificate
             if (mapCertificate.count(hash))
             {
                 const CScCertificate& cert = mapCertificate[hash].GetCertificate();
-                if (fRecursive) {
+                if (fRecursive)
+                {
                     for (unsigned int i = 0; i < cert.vout.size(); i++) {
                         std::map<COutPoint, CInPoint>::iterator it = mapNextTx.find(COutPoint(hash, i));
                         if (it == mapNextTx.end())
@@ -311,7 +287,6 @@ void CTxMemPool::remove(const CScCertificate &origCert, std::list<CScCertificate
                         objToRemove.push_back(it->second.ptx->GetHash());
                     }
                 }
-                //removed.push_back(cert);
                 totalTxSize -= mapCertificate[hash].GetCertificateSize();
                 cachedInnerUsage -= mapCertificate[hash].DynamicMemoryUsage();
                 LogPrint("cert", "%s():%d - removing cert [%s] from mempool\n", __func__, __LINE__, hash.ToString() );
@@ -319,25 +294,8 @@ void CTxMemPool::remove(const CScCertificate &origCert, std::list<CScCertificate
                 nCertificatesUpdated++;
             }
         }
-#else
-        const uint256& hash = origCert.GetHash();
-        if (!mapCertificate.count(hash))
-        {
-            // should not happen
-            LogPrint("cert", "%s():%d - ERROR: cert [%s] not in mempool\n", __func__, __LINE__, hash.ToString() );
-            return;
-        }
-
-        const CScCertificate& cert = mapCertificate[hash].GetCertificate();
-        removed.push_back(cert);
-        totalTxSize -= mapCertificate[hash].GetCertificateSize();
-        cachedInnerUsage -= mapCertificate[hash].DynamicMemoryUsage();
-        LogPrint("cert", "%s():%d - removing cert [%s] from mempool\n", __func__, __LINE__, hash.ToString() );
-        mapCertificate.erase(hash);
-        nCertificatesUpdated++;
-// TODO cert: miner policy to be handled for certificates
+// TODO cert: miner policy not handled for certificates
 //        minerPolicyEstimator->removeTx(hash);
-#endif
     }
 }
 
@@ -455,7 +413,9 @@ void CTxMemPool::removeForBlock(const std::vector<CTransaction>& vtx, unsigned i
     // After the txs in the new block have been removed from the mempool, update policy estimates
     minerPolicyEstimator->processBlock(nBlockHeight, entries, fCurrentEstimate);
 }
+
 #if 1
+// a certificate has no conflicting txes since it has no inputs
 void CTxMemPool::removeForBlock(const std::vector<CScCertificate>& vcert, unsigned int nBlockHeight, bool fCurrentEstimate)
 {
     LOCK(cs);
@@ -468,8 +428,7 @@ void CTxMemPool::removeForBlock(const std::vector<CScCertificate>& vcert, unsign
     }
     for (const auto& obj : vcert)
     {
-        std::list<CScCertificate> dummy;
-        remove(obj, dummy, false);
+        remove(obj, false);
         ClearPrioritisation(obj.GetHash());
     }
 }
@@ -579,8 +538,8 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
         const auto& cert = it->second.GetCertificate();
         CValidationState state;
         assert(cert.ContextualCheckInputs(state, mempoolDuplicate, false, chainActive, 0, false, Params().GetConsensus(), NULL));
-        // TODO cert: check this - it is useful updating coins with cert outputs because the cache is checked below for any tx inputs
-        // and maybe some tx has a cert out as its input.
+        // updating coins with cert outputs because the cache is checked below for
+        // any tx inputs and maybe some tx has a cert out as its input.
         cert.UpdateCoins(state, mempoolDuplicate, 1000000);
     }
 #endif

@@ -147,13 +147,6 @@ TEST(wallet_tests, note_data_serialisation) {
 
 TEST(wallet_tests, find_unspent_notes) {
     SelectParams(CBaseChainParams::TESTNET);
-/*
-    // print logs to console
-    fDebug = true;
-    fPrintToConsole = true;
-    mapArgs["-debug"] = "forks";
-    mapMultiArgs["-debug"].push_back("forks");
-*/
     CWallet wallet;
     auto sk = libzcash::SpendingKey::random();
     wallet.AddSpendingKey(sk);

@@ -25,14 +25,12 @@ static inline size_t RecursiveDynamicUsage(const CTxOut& out) {
     return RecursiveDynamicUsage(out.scriptPubKey);
 }
 
-#if 1
 // no dynamic fields
 static inline size_t RecursiveDynamicUsage(const CTxScCreationOut& ccout) { return 0; }
 static inline size_t RecursiveDynamicUsage(const CTxCertifierLockOut& ccout) { return 0; }
 static inline size_t RecursiveDynamicUsage(const CTxForwardTransferOut& ccout) { return 0; }
 
 static inline size_t RecursiveDynamicUsage(const CTxBackwardTransferCrosschainOut& ccout) { return 0; }
-#endif
 
 static inline size_t RecursiveDynamicUsage(const CTransaction& tx) {
     size_t mem = 0;
@@ -45,7 +43,6 @@ static inline size_t RecursiveDynamicUsage(const CTransaction& tx) {
         mem += RecursiveDynamicUsage(*it);
     }
 // what about shielded components???
-#if 1
     mem += memusage::DynamicUsage(tx.vsc_ccout);
     mem += memusage::DynamicUsage(tx.vcl_ccout);
     mem += memusage::DynamicUsage(tx.vft_ccout);
@@ -58,11 +55,9 @@ static inline size_t RecursiveDynamicUsage(const CTransaction& tx) {
     for (std::vector<CTxForwardTransferOut>::const_iterator it = tx.vft_ccout.begin(); it != tx.vft_ccout.end(); it++) {
         mem += RecursiveDynamicUsage(*it);
     }
-#endif
     return mem;
 }
 
-#if 1
 static inline size_t RecursiveDynamicUsage(const CScCertificate& cert) {
     size_t mem = 0;
     mem += memusage::DynamicUsage(cert.vout);
@@ -75,7 +70,6 @@ static inline size_t RecursiveDynamicUsage(const CScCertificate& cert) {
     }
     return mem;
 }
-#endif
 
 // these symbols seem not to be referenced by anyone
 //--------------------------------------------------
@@ -88,7 +82,6 @@ static inline size_t RecursiveDynamicUsage(const CMutableTransaction& tx) {
         mem += RecursiveDynamicUsage(*it);
     }
 // what about shielded components???
-#if 1
     mem += memusage::DynamicUsage(tx.vsc_ccout);
     mem += memusage::DynamicUsage(tx.vcl_ccout);
     mem += memusage::DynamicUsage(tx.vft_ccout);
@@ -101,7 +94,6 @@ static inline size_t RecursiveDynamicUsage(const CMutableTransaction& tx) {
     for (std::vector<CTxForwardTransferOut>::const_iterator it = tx.vft_ccout.begin(); it != tx.vft_ccout.end(); it++) {
         mem += RecursiveDynamicUsage(*it);
     }
-#endif
     return mem;
 }
 

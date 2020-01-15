@@ -2234,11 +2234,22 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
 
             CBlock block;
             ReadBlockFromDisk(block, pindex);
+#if 0
             BOOST_FOREACH(CTransaction& tx, block.vtx)
             {
                 if (AddToWalletIfInvolvingMe(tx, &block, fUpdate))
                     ret++;
             }
+#else
+            std::vector<const CTransactionBase*> vTxBase;
+            block.GetTxAndCertsVector(vTxBase);
+  
+            for (const CTransactionBase* obj: vTxBase)
+            {
+                if (AddToWalletIfInvolvingMe(*obj, &block, fUpdate))
+                    ret++;
+            }
+#endif
 
             ZCIncrementalMerkleTree tree;
             // This should never fail: we should always be able to get the tree
@@ -4709,7 +4720,6 @@ int CMerkleCert::GetIndexInBlock(const CBlock& block)
 
 int CMerkleCert::GetBlocksToMaturity() const
 {
-    // TODO cert: in future this might be modified
     static const int COIN_CERTIFICATE_MATURITY = 0;
     assert(IsCoinCertified());
     return max(0, (COIN_CERTIFICATE_MATURITY+1) - GetDepthInMainChain());

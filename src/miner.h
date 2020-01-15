@@ -26,6 +26,7 @@ struct CBlockTemplate
     std::vector<CAmount> vTxFees;
     std::vector<int64_t> vTxSigOps;
     std::vector<CAmount> vCertFees;
+    std::vector<int64_t> vCertSigOps;
 };
 
 class CCoinsViewCache;

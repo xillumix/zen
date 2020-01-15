@@ -12,22 +12,8 @@ extern CFeeRate minRelayTxFee;
 namespace Sidechain
 {
 
-#if 0
 void AddSidechainOutsToJSON (const CTransaction& tx, UniValue& parentObj)
 {
-#else
-    // TODO cert: add a virtual method to base class which calls this
-void AddSidechainOutsToJSON (const CTransactionBase& obj, UniValue& parentObj)
-{
-    const CTransaction* ptx = dynamic_cast<const CTransaction*>(&obj);
-    if (!ptx)
-    {
-        // nothing to do
-        return;
-    }
-    const CTransaction& tx = *ptx;
-#endif
-
     UniValue vscs(UniValue::VARR);
     // global idx
     unsigned int nIdx = 0; 
@@ -227,8 +213,6 @@ void AddScInfoToJSON(UniValue& result)
 }
 
 
-
-#if 1
 //--------------------------------------------------------------------------------------------
 // Cross chain outputs
 
@@ -240,67 +224,38 @@ bool CRecipientHandler::visit(const CcRecipientVariant& rec)
 
 bool CRecipientHandler::handle(const CRecipientScCreation& r)
 {
-    CMutableTransaction* tptr = dynamic_cast<CMutableTransaction*>(tx);
-    if (!tptr)
-    {
-        return false;
-    }
     CTxScCreationOut txccout(r.scId, r.creationData.withdrawalEpochLength);
     // no dust can be found in sc creation
-    tptr->vsc_ccout.push_back(txccout);
-    return true;
+    return txBase->add(txccout);
 };
 
 bool CRecipientHandler::handle(const CRecipientCertLock& r)
 {
-    CMutableTransaction* tptr = dynamic_cast<CMutableTransaction*>(tx);
-    if (!tptr)
-    {
-        return false;
-    }
-
     CTxCertifierLockOut txccout(r.nValue, r.address, r.scId, r.epoch);
     if (txccout.IsDust(::minRelayTxFee))
     {
         err = _("Transaction amount too small");
         return false;
     }
-    tptr->vcl_ccout.push_back(txccout);
-    return true;
+    return txBase->add(txccout);
 };
 
 bool CRecipientHandler::handle(const CRecipientForwardTransfer& r)
 {
-    CMutableTransaction* tptr = dynamic_cast<CMutableTransaction*>(tx);
-    if (!tptr)
-    {
-        return false;
-    }
-
     CTxForwardTransferOut txccout(r.nValue, r.address, r.scId);
     if (txccout.IsDust(::minRelayTxFee))
     {
         err = _("Transaction amount too small");
         return false;
     }
-    tptr->vft_ccout.push_back(txccout);
-    return true;
+    return txBase->add(txccout);
 };
 
 bool CRecipientHandler::handle(const CRecipientBackwardTransfer& r)
 {
-    CMutableScCertificate* tptr = dynamic_cast<CMutableScCertificate*>(tx);
-    if (!tptr)
-    {
-        return false;
-    }
-
     // fill vout here but later their amount will be reduced carving out the fee by the caller
     CTxOut txout(r.nValue, r.scriptPubKey);
-
-    // base method
-    tptr->vout.push_back(txout);
-    return true;
+    return txBase->add(txout);
 };
-#endif
-}
+
+}  // end of namespace

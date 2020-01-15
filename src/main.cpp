@@ -2367,6 +2367,7 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
     if (!UndoReadFromDisk(blockUndo, pos, pindex->pprev->GetBlockHash()))
         return error("DisconnectBlock(): failure reading undo data");
 
+    // no certs (and no coinbase) in blockundo
     if (blockUndo.vtxundo.size() + 1 != block.vtx.size())
         return error("DisconnectBlock(): block and undo data inconsistent");
 
@@ -2397,7 +2398,14 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
             if (outsBlock.nVersion < 0)
                 outs->nVersion = outsBlock.nVersion;
             if (*outs != outsBlock)
+#if 0
                 fClean = fClean && error("DisconnectBlock(): added transaction mismatch? database corrupted");
+#else
+            {
+                fClean = fClean && error("DisconnectBlock(): added transaction mismatch? database corrupted");
+                LogPrint("cert", "%s():%d - tx[%s]\n", __func__, __LINE__, hash.ToString());
+            }
+#endif
  
             // remove outputs
             outs->Clear();
@@ -2551,12 +2559,17 @@ int32_t ComputeBlockVersion(const CBlockIndex* pindexPrev, const Consensus::Para
     LOCK(cs_main);
     int32_t nVersion = VERSIONBITS_TOP_BITS;
 
+#if 0
     for (int i = 0; i < (int)Consensus::MAX_VERSION_BITS_DEPLOYMENTS; i++) {
         ThresholdState state = VersionBitsState(pindexPrev, params, (Consensus::DeploymentPos)i, versionbitscache);
         if (state == THRESHOLD_LOCKED_IN || state == THRESHOLD_STARTED) {
             nVersion |= VersionBitsMask(params, (Consensus::DeploymentPos)i);
         }
     }
+#else
+    // the for loop above actually is not entered and VERSIONBITS_TOP_BITS is returned.
+    nVersion = CBlockHeader::SC_CERT_VERSION;
+#endif
 
     return nVersion;
 }
@@ -2635,8 +2648,17 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     // Do not allow blocks that contain transactions which 'overwrite' older transactions,
     // unless those are already completely spent.
+#if 0
     BOOST_FOREACH(const CTransaction& tx, block.vtx) {
         const CCoins* coins = view.AccessCoins(tx.GetHash());
+#else
+    std::vector<const CTransactionBase*> vTxBase;
+    block.GetTxAndCertsVector(vTxBase);
+
+    for (const CTransactionBase* obj: vTxBase)
+    {
+        const CCoins* coins = view.AccessCoins(obj->GetHash());
+#endif
         if (coins && !coins->IsPruned())
             return state.DoS(100, error("ConnectBlock(): tried to overwrite transaction"),
                              REJECT_INVALID, "bad-txns-BIP30");
@@ -2691,9 +2713,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         nInputs += tx.vin.size();
         nSigOps += GetLegacySigOpCount(tx);
 #else
-    std::vector<const CTransactionBase*> vTxBase;
-    block.GetTxAndCertsVector(vTxBase);
-
     for (unsigned int i = 0; i < vTxBase.size(); i++)
     {
         const CTransactionBase &tx = *(vTxBase[i]);
@@ -2711,6 +2730,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             if (!view.HaveInputs(tx))
 #else
             if (!tx.HaveInputs(view))
+            {
+                LogPrintf("%s():%d - ERROR: bad tx[%s]: input missing/spent\n",
+                    __func__, __LINE__, tx.GetHash().ToString());
 #endif
                 return state.DoS(100, error("ConnectBlock(): inputs missing/spent"),
                                  REJECT_INVALID, "bad-txns-inputs-missingorspent");
@@ -2719,6 +2741,8 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 #if 0
             if (!view.HaveJoinSplitRequirements(tx))
 #else
+            }
+
             if (!tx.HaveJoinSplitRequirements(view))
 #endif
                 return state.DoS(100, error("ConnectBlock(): JoinSplit requirements not met"),
@@ -2740,21 +2764,38 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             nFees += view.GetValueIn(tx)-tx.GetValueOut();
 #else
             CAmount valueIn = tx.GetValueIn(view);
-            nFees += tx.GetFeeAmount(valueIn);
+            CAmount nFee = tx.GetFeeAmount(valueIn);
+
+            // These are also checked (for txes only) in the call below, but here we already have all needed parameters
+            if (nFee < 0)
+            {
+                // this tx/cert spends more than it can.
+                return state.DoS(100, error("ConnectBlock(): %s Fee < 0", tx.GetHash().ToString()),
+                             REJECT_INVALID, "bad-txns-fee-negative");
+            }
+            if (!MoneyRange(nFee))
+            {
+                return state.DoS(100, error("ConnectBlock(): fee out of range"),
+                             REJECT_INVALID, "bad-txns-fee-outofrange");
+            }
+            nFees += nFee;
 #endif
 
             std::vector<CScriptCheck> vChecks;
 #if 0
             if (!ContextualCheckInputs(tx, state, view, fExpensiveChecks, chain, flags, false, chainparams.GetConsensus(), nScriptCheckThreads ? &vChecks : NULL))
+                return false;
 #else
             if (!tx.ContextualCheckInputs(state, view, fExpensiveChecks, chain, flags, false, chainparams.GetConsensus(), nScriptCheckThreads ? &vChecks : NULL))
-#endif
+            {
                 return false;
+            }
+#endif
             control.Add(vChecks);
         }
 
         // perform some check related to sidechains state, e.g. creation of an existing scid, fw to
-        // a not existing one and so on
+        // a not existing one and certificate amount against sc balance
         if (!tx.IsApplicableToState() )
         {
             LogPrint("sc", "%s():%d - ERROR: tx=%s\n", __func__, __LINE__, tx.GetHash().ToString() );
@@ -2808,7 +2849,14 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     blockundo.old_tree_root = old_tree_root;
 
     int64_t nTime1 = GetTimeMicros(); nTimeConnect += nTime1 - nTimeStart;
+#if 0
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime1 - nTimeStart), 0.001 * (nTime1 - nTimeStart) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime1 - nTimeStart) / (nInputs-1), nTimeConnect * 0.000001);
+#else
+    LogPrint("bench", "      - Connect %u txes, %u certs: %.2fms (%.3fms/(tx+cert), %.3fms/txin) [%.2fs]\n",
+        (unsigned)block.vtx.size(), (unsigned)block.vcert.size(),
+         0.001 * (nTime1 - nTimeStart), 0.001 * (nTime1 - nTimeStart) / vTxBase.size(),
+         nInputs <= 1 ? 0 : 0.001 * (nTime1 - nTimeStart) / (nInputs-1), nTimeConnect * 0.000001);
+#endif
 
     CAmount blockReward = nFees + GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus());
     if (block.vtx[0].GetValueOut() > blockReward)
@@ -3078,6 +3126,7 @@ bool static DisconnectTip(CValidationState &state) {
         return error("DisconnectTip(): DisconnectBlock %s failed", pindexDelete->GetBlockHash().ToString());
     }
 
+#if 0
     // Resurrect mempool transactions and certificates from the disconnected block.
     BOOST_FOREACH(const CTransaction &tx, block.vtx) {
         // ignore validation errors in resurrected transactions
@@ -3088,18 +3137,20 @@ bool static DisconnectTip(CValidationState &state) {
             mempool.remove(tx, removed, true);
         }
     }
-#if 1
-    // TODO cert: add a removeFromMemPool() method in CTransactionBase and do it all polimorphically
-    BOOST_FOREACH(const CScCertificate &cert, block.vcert) {
-        // ignore validation errors in resurrected transactions
-        list<CScCertificate> removed;
+#else
+    std::vector<const CTransactionBase*> vTxBase;
+    block.GetTxAndCertsVector(vTxBase);
+
+    for (const CTransactionBase* obj: vTxBase)
+    {
         CValidationState stateDummy;
-        if (!AcceptToMemoryPool(mempool, stateDummy, cert, false, NULL))
+        if (obj->IsCoinBase() || !AcceptToMemoryPool(mempool, stateDummy, *obj, false, NULL))
         {
-            mempool.remove(cert, removed, true);
+            obj->RemoveFromMemPool(&mempool);
         }
     }
 #endif
+
     if (anchorBeforeDisconnect != anchorAfterDisconnect) {
         // The anchor may not change between block disconnects,
         // in which case we don't want to evict from the mempool yet!
@@ -3114,9 +3165,18 @@ bool static DisconnectTip(CValidationState &state) {
     assert(pcoinsTip->GetAnchorAt(pcoinsTip->GetBestAnchor(), newTree));
     // Let wallets know transactions went from 1-confirmed to
     // 0-confirmed or conflicted:
+#if 0
     BOOST_FOREACH(const CTransaction &tx, block.vtx) {
         SyncWithWallets(tx, NULL);
     }
+#else
+    // and about certificates 
+    // passig NULL for wallet means that the transaction does not belong to a block
+    for (const CTransactionBase* obj: vTxBase)
+    {
+        obj->SyncWithWallets(NULL);
+    }
+#endif
     // Update cached incremental witnesses
     GetMainSignals().ChainTip(pindexDelete, &block, newTree, false);
     return true;
@@ -3171,11 +3231,16 @@ bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *
         return false;
     int64_t nTime5 = GetTimeMicros(); nTimeChainState += nTime5 - nTime4;
     LogPrint("bench", "  - Writing chainstate: %.2fms [%.2fs]\n", (nTime5 - nTime4) * 0.001, nTimeChainState * 0.000001);
+
     // Remove conflicting transactions from the mempool.
     list<CTransaction> txConflicted;
     mempool.removeForBlock(pblock->vtx, pindexNew->nHeight, txConflicted, !IsInitialBlockDownload());
-    // TODO cert: check if certificates has potential conflict and handle it
+
+#if 1
+    // similar call but for conflicts, not applicable to certificates
     mempool.removeForBlock(pblock->vcert, pindexNew->nHeight, !IsInitialBlockDownload());
+#endif
+
     mempool.check(pcoinsTip);
     // Update chainActive & related variables.
     UpdateTip(pindexNew);
@@ -3664,7 +3729,11 @@ CBlockIndex* AddToBlockIndex(const CBlockHeader& block)
 /** Mark a block as having its data received and checked (up to BLOCK_VALID_TRANSACTIONS). */
 bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBlockIndex *pindexNew, const CDiskBlockPos& pos, BlockSet* sForkTips)
 {
+#if 0
     pindexNew->nTx = block.vtx.size();
+#else
+    pindexNew->nTx = block.vtx.size() + block.vcert.size();
+#endif
     pindexNew->nChainTx = 0;
     CAmount sproutValue = 0;
     for (auto tx : block.vtx) {
@@ -3864,7 +3933,6 @@ bool CheckBlock(const CBlock& block, CValidationState& state,
         return false;
 
     // Check the merkle root.
-    // TODO sc and cert: what about hashScMerkleRootsMap?
     if (fCheckMerkleRoot) {
         bool mutated;
         uint256 hashMerkleRoot2 = block.BuildMerkleTree(&mutated);
@@ -3885,7 +3953,11 @@ bool CheckBlock(const CBlock& block, CValidationState& state,
     // because we receive the wrong transactions for it.
 
     // Size limits
+#if 0
     if (block.vtx.empty() || block.vtx.size() > MAX_BLOCK_SIZE || ::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
+#else
+    if (block.vtx.empty() || (block.vtx.size() + block.vcert.size()) > MAX_BLOCK_SIZE || ::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
+#endif
         return state.DoS(100, error("CheckBlock(): size limits failed"),
                          REJECT_INVALID, "bad-blk-length");
 
@@ -3898,19 +3970,35 @@ bool CheckBlock(const CBlock& block, CValidationState& state,
             return state.DoS(100, error("CheckBlock(): more than one coinbase"),
                              REJECT_INVALID, "bad-cb-multiple");
 
+#if 0
     // Check transactions
     BOOST_FOREACH(const CTransaction& tx, block.vtx)
     {
         if (!CheckTransaction(tx, state, verifier))
+#else
+    // Check transactions and certificates
+    std::vector<const CTransactionBase*> vTxBase;
+    block.GetTxAndCertsVector(vTxBase);
+
+    for (const CTransactionBase* obj: vTxBase)
+    {
+        if (!obj->Check(state, verifier) )
+#endif
         {
             return error("CheckBlock(): CheckTransaction failed");
         }
     }
 
     unsigned int nSigOps = 0;
+#if 0
     BOOST_FOREACH(const CTransaction& tx, block.vtx)
     {
         nSigOps += GetLegacySigOpCount(tx);
+#else
+    for (const CTransactionBase* obj: vTxBase)
+    {
+        nSigOps += obj->GetLegacySigOpCount();
+#endif
     }
     if (nSigOps > MAX_BLOCK_SIGOPS)
         return state.DoS(100, error("CheckBlock(): out-of-bounds SigOpCount"),
@@ -3978,6 +4066,11 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, CBlockIn
             return state.DoS(10, error("%s: contains a non-final transaction", __func__), REJECT_INVALID, "bad-txns-nonfinal");
         }
     }
+
+#if 1
+    // no contextual conditions so far in certificates.
+    // Should any be introduced, add a virtual method and loop on them too
+#endif
 
     // Enforce BIP 34 rule that the coinbase starts with serialized block height.
     // In Zcash this has been enforced since launch, except that the genesis
@@ -4591,7 +4684,11 @@ bool CVerifyDB::VerifyDB(CCoinsView *coinsview, int nCheckLevel, int nCheckDepth
                 nGoodTransactions = 0;
                 pindexFailure = pindex;
             } else
+#if 0
                 nGoodTransactions += block.vtx.size();
+#else
+                nGoodTransactions += block.vtx.size() + block.vcert.size();
+#endif
         }
 
         if (ShutdownRequested())
@@ -5105,14 +5202,22 @@ bool static AlreadyHave(const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             }
  
             return recentRejects->contains(inv.hash) ||
-                   mempool.exists(inv.hash) ||
+                   mempool.existsTx(inv.hash) ||
                    mapOrphanTransactions.count(inv.hash) ||
                    pcoinsTip->HaveCoins(inv.hash);
         }
         case MSG_CERT:
         {
-            // TODO cert: check if we must add/check other conditions such as above
-            return mempool.exists(inv.hash) ||
+            assert(recentRejects);
+            if (chainActive.Tip()->GetBlockHash() != hashRecentRejectsChainTip)
+            {
+                hashRecentRejectsChainTip = chainActive.Tip()->GetBlockHash();
+                recentRejects->reset();
+            }
+ 
+            // a cert can not be in orphan map
+            return recentRejects->contains(inv.hash) ||
+                   mempool.existsCert(inv.hash) ||
                    pcoinsTip->HaveCoins(inv.hash);
         }
         case MSG_BLOCK:
@@ -5201,6 +5306,7 @@ void static ProcessGetData(CNode* pfrom)
                         LOCK(pfrom->cs_filter);
                         if (pfrom->pfilter)
                         {
+                            // TODO cert:  MSG_FILTERED_BLOCK to be tested 
                             CMerkleBlock merkleBlock(block, *pfrom->pfilter);
                             pfrom->PushMessage("merkleblock", merkleBlock);
                             // CMerkleBlock just contains hashes, so also push any transactions in the block the client did not see
@@ -5211,8 +5317,31 @@ void static ProcessGetData(CNode* pfrom)
                             // however we MUST always provide at least what the remote peer needs
                             typedef std::pair<unsigned int, uint256> PairType;
                             BOOST_FOREACH(PairType& pair, merkleBlock.vMatchedTxn)
+#if 0
                                 if (!pfrom->setInventoryKnown.count(CInv(MSG_TX, pair.second)))
                                     pfrom->PushMessage("tx", block.vtx[pair.first]);
+#else
+                            {
+                                if (0 <= pair.first < block.vtx.size() )
+                                {
+                                    if (!pfrom->setInventoryKnown.count(CInv(MSG_TX, pair.second)))
+                                        pfrom->PushMessage("tx", block.vtx[pair.first]);
+                                }
+                                else
+                                if (block.vtx.size() < pair.first < block.vcert.size())
+                                {
+                                    if (!pfrom->setInventoryKnown.count(CInv(MSG_CERT, pair.second)))
+                                    {
+                                        unsigned int offset = pair.first - block.vtx.size();
+                                        pfrom->PushMessage("tx", block.vcert[pair.first]);
+                                    }
+                                }
+                                else
+                                {
+                                    LogPrintf("%s():%d -  tx index out of range=%d, can not handle merkle block\n", __func__, __LINE__, pair.first);
+                                }
+                            }
+#endif
                         }
                         // else
                             // no response
@@ -6020,24 +6149,22 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LOCK(cs_main);
 
-        bool fMissingInputs = false;
         CValidationState state;
 
         pfrom->setAskFor.erase(inv.hash);
         mapAlreadyAskedFor.erase(inv);
 
-        if (!AlreadyHave(inv) && AcceptToMemoryPool(mempool, state, cert, true, &fMissingInputs))
+        if (!AlreadyHave(inv) && AcceptToMemoryPool(mempool, state, cert, true, NULL /*&fMissingInputs*/))
         {
             mempool.check(pcoinsTip);
             RelayCertificate(cert);
-//            vWorkQueue.push_back(inv.hash);
+            vWorkQueue.push_back(inv.hash);
 
-            LogPrint("mempool", "AcceptToMemoryPool: peer=%d %s: accepted %s (poolsz %u)\n",
+            LogPrint("mempool", "AcceptToMemoryPool: peer=%d %s: accepted cert %s (poolsz %u)\n",
                 pfrom->id, pfrom->cleanSubVer,
                 cert.GetHash().ToString(),
                 mempool.sizeCert());
 
-#if 0
             // Recursively process any orphan transactions that depended on this one
             set<NodeId> setMisbehaving;
             for (unsigned int i = 0; i < vWorkQueue.size(); i++)
@@ -6058,6 +6185,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     // anyone relaying LegitTxX banned)
                     CValidationState stateDummy;
 
+                    if (vWorkQueue[i] == cert.GetHash())
+                    {
+                        LogPrint("cert", "%s():%d - processing orphan tx[%s], parent cert[%s]\n",
+                            __func__, __LINE__, orphanTx.GetHash().ToString(), cert.GetHash().ToString());
+                    }
 
                     if (setMisbehaving.count(fromPeer))
                         continue;
@@ -6091,8 +6223,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             BOOST_FOREACH(uint256 hash, vEraseQueue)
                 EraseOrphanTx(hash);
+// a certificate can not be an orphan 
+#if 0
         }
-        else if (fMissingInputs && tx.vjoinsplit.size() == 0)
+        else if (fMissingInputs)
         {
             AddOrphanTx(tx, pfrom->GetId());
 
@@ -6137,7 +6271,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 Misbehaving(pfrom->GetId(), nDoS);
         }
     }
-
 
     else if (strCommand == "headers" && !fImporting && !fReindex) // Ignore headers received while importing
     {
