@@ -210,7 +210,6 @@ class WalletShieldCoinbaseTest (BitcoinTestFramework):
         self.sync_all()
         mytaddr = self.nodes[0].getnewaddress()
         result = self.nodes[0].z_shieldcoinbase(mytaddr, myzaddr, Decimal('0.0001'))
-        print(result)
         assert_equal(result["shieldingUTXOs"], Decimal('50'))
         assert_equal(result["remainingUTXOs"], Decimal('50'))
         self.wait_and_assert_operationid_status(0, result['opid'])
