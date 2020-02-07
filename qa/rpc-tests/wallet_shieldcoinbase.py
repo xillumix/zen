@@ -60,9 +60,9 @@ class WalletShieldCoinbaseTest (BitcoinTestFramework):
         return txid
 
     def run_test (self):
-        
+
         blockreward = 11.4375
-        
+
         print "Mining blocks..."
 
         self.nodes[0].generate(1)
@@ -214,12 +214,13 @@ class WalletShieldCoinbaseTest (BitcoinTestFramework):
         assert_equal(result["shieldingUTXOs"], Decimal('50'))
         assert_equal(result["remainingUTXOs"], Decimal('50'))
         self.wait_and_assert_operationid_status(0, result['opid'])
+        sync_mempools([self.nodes[0]])
 
         # Verify maximum number of utxos which node 0 can shield can be set by the limit parameter
         result = self.nodes[0].z_shieldcoinbase(mytaddr, myzaddr, Decimal('0.0001'), 33)
         assert_equal(result["shieldingUTXOs"], Decimal('33'))
         assert_equal(result["remainingUTXOs"], Decimal('17'))
-        self.wait_and_assert_operationid_status(0, result['opid'])        
+        self.wait_and_assert_operationid_status(0, result['opid'])
         sync_blocks(self.nodes[:2])
         sync_mempools(self.nodes[:2])
         self.nodes[1].generate(1)
