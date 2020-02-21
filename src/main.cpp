@@ -1376,7 +1376,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     if (!tx.IsApplicableToState() )
     {
         LogPrint("sc", "%s():%d - tx [%s] is not applicable\n", __func__, __LINE__, hash.ToString());
-        return false;
+        return state.DoS(0, error("AcceptToMemoryPool: not applicable"),
+            REJECT_NONSTANDARD, "AcceptToMemoryPool: not applicable");
     }
 
     // Check for conflicts with in-memory transactions
@@ -7542,6 +7543,13 @@ int getScCoinsMaturity()
 {
     // gets constructed just one time
     static int retVal( getInitScCoinsMaturity() );
+    return retVal;
+}
+
+int getScMinWithdrawalEpochLength()
+{
+    // gets constructed just one time
+    static int retVal(Params().ScMinWithdrawalEpochLength());
     return retVal;
 }
 

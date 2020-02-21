@@ -67,7 +67,7 @@ protected:
     CBlockUndo   createEmptyBlockUndo();
 
 private:
-    CMutableTransaction populateTx(int txVersion, const uint256 & newScId = uint256S("0"), const CAmount & fwdTxAmount = CAmount(0));
+    CMutableTransaction populateTx(int txVersion, const uint256 & newScId = uint256S("0"), const CAmount & creationTxAmount = CAmount(0), const CAmount & fwdTxAmount = CAmount(0));
     void signTx(CMutableTransaction& mtx);
 };
 
@@ -771,11 +771,12 @@ void SidechainTestSuite::preFillSidechainsCollection() {
     tmpCoinViewCache.Flush();
 }
 
-CTransaction SidechainTestSuite::createNewSidechainTxWith(const uint256 & newScId, const CAmount & fwdTxAmount)
+CTransaction SidechainTestSuite::createNewSidechainTxWith(const uint256 & newScId, const CAmount & creationTxAmount)
 {
-    CMutableTransaction mtx = populateTx(SC_TX_VERSION, newScId, fwdTxAmount);
+    CMutableTransaction mtx = populateTx(SC_TX_VERSION, newScId, creationTxAmount);
     mtx.vout.resize(0);
     mtx.vjoinsplit.resize(0);
+    mtx.vft_ccout.resize(0);
     signTx(mtx);
 
     //CValidationState txState;
@@ -785,7 +786,7 @@ CTransaction SidechainTestSuite::createNewSidechainTxWith(const uint256 & newScI
 
 CTransaction SidechainTestSuite::createFwdTransferTxWith(const uint256 & newScId, const CAmount & fwdTxAmount)
 {
-    CMutableTransaction mtx = populateTx(SC_TX_VERSION, newScId, fwdTxAmount);
+    CMutableTransaction mtx = populateTx(SC_TX_VERSION, newScId, 0, fwdTxAmount);
     mtx.vout.resize(0);
     mtx.vjoinsplit.resize(0);
     mtx.vsc_ccout.resize(0);
@@ -866,12 +867,7 @@ void  SidechainTestSuite::appendTxTo(CTransaction & tx, const uint256 & scId, co
 CBlockUndo SidechainTestSuite::createBlockUndoWith(const uint256 & scId, int height, CAmount amount)
 {
     CBlockUndo retVal;
-#if 0
-    std::map<int, CAmount> AmountPerHeight;
-    AmountPerHeight[height] = amount;
-#else
     CAmount AmountPerHeight = amount;
-#endif
     ScUndoData data;
     data.immAmount = AmountPerHeight;
     data.certEpoch = Sidechain::EPOCH_NULL;
@@ -885,7 +881,7 @@ CBlockUndo SidechainTestSuite::createEmptyBlockUndo()
     return CBlockUndo();
 }
 
-CMutableTransaction SidechainTestSuite::populateTx(int txVersion, const uint256 & newScId, const CAmount & fwdTxAmount) {
+CMutableTransaction SidechainTestSuite::populateTx(int txVersion, const uint256 & newScId, const CAmount & creationTxAmount, const CAmount & fwdTxAmount) {
     CMutableTransaction mtx;
     mtx.nVersion = txVersion;
 
@@ -910,6 +906,8 @@ CMutableTransaction SidechainTestSuite::populateTx(int txVersion, const uint256 
 
     mtx.vsc_ccout.resize(1);
     mtx.vsc_ccout[0].scId = newScId;
+    mtx.vsc_ccout[0].nValue = creationTxAmount;
+    mtx.vsc_ccout[0].withdrawalEpochLength = getScMinWithdrawalEpochLength();
 
     mtx.vft_ccout.resize(1);
     mtx.vft_ccout[0].scId = mtx.vsc_ccout[0].scId;

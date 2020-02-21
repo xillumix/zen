@@ -58,6 +58,7 @@ testScripts=(
     'sc_cert_epoch.py'
     'sc_cert_invalidate.py'
     'sc_fwd_maturity.py'
+    'sc_rawcertificate.py'
 );
 testScriptsExt=(
     'getblocktemplate_longpoll.py'

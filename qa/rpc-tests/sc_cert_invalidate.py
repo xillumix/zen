@@ -111,7 +111,7 @@ class sc_cert_base(BitcoinTestFramework):
         self.mark_logs("\nNode 1 creates the SC spending " + str(creation_amount) + " coins ...")
         amounts = []
         amounts.append( {"address":"dada", "amount": creation_amount})
-        creating_tx = self.nodes[0].sc_create(scid, EPOCH_LENGTH, amounts);
+        creating_tx = self.nodes[0].sc_create(scid, EPOCH_LENGTH, "dada", creation_amount)
         print "creating_tx = " + creating_tx
         sc_txes.append(creating_tx)
         self.sync_all()

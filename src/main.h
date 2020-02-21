@@ -248,6 +248,7 @@ bool getHeadersIsOnMain(const CBlockLocator& locator, const uint256& hashStop, C
 
 int getCheckBlockAtHeightSafeDepth();
 int getScCoinsMaturity();
+int getScMinWithdrawalEpochLength();
 int getCheckBlockAtHeightMinAge();
 bool getRequireStandard();
 

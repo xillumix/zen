@@ -131,6 +131,8 @@ public:
     bool Flush();
 
 private:
+    bool DecrementImmatureAmount(const uint256& scId, ScInfo& targetScInfo, CAmount nValue, int maturityHeight);
+
     ScCoinsPersistedView& persistedView;
     ScInfoMap mUpdatedOrNewScInfoList;
     std::set<uint256> sDeletedScList;
@@ -165,6 +167,7 @@ public:
     static bool isLegalEpoch(const uint256& scId, int epochNumber, const uint256& epochBlockHash);
     static int getCertificateMaxIncomingHeight(const uint256& scId, int epochNumber);
     static bool epochAlreadyHasCertificate(const uint256& scId, int epochNumber, const CTxMemPool& pool, uint256& certHash);
+    static void generateNewSidechainId(uint256& scId);
 
     // print functions
     bool dump_info(const uint256& scId);

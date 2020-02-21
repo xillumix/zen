@@ -126,10 +126,12 @@ class ScInvalidateTest(BitcoinTestFramework):
         sc_address="0000000000000000000000000000000000000000000000000000000000000abc"
         scid="0000000000000000000000000000000000000000000000000000000000000022"
         sc_epoch=123
-        sc_amount=Decimal('10.00000000')
-        sc=[{"scid": scid,"epoch_length": sc_epoch}]
+        sc_cr_amount = Decimal('5.00000000')
+        sc_ft_amount = Decimal('5.00000000')
+        sc_amount = sc_cr_amount + sc_ft_amount
+        sc=[{"scid": scid,"epoch_length": sc_epoch, "amount":sc_cr_amount, "address":sc_address}]
         inputs = [{'txid': txid, 'vout': vout['n']}]
-        sc_ft=[{"address": sc_address, "amount":sc_amount, "scid": scid}]
+        sc_ft=[{"address": sc_address, "amount":sc_ft_amount, "scid": scid}]
 
         rawtx=self.nodes[2].createrawtransaction(inputs,{},sc,sc_ft)
         sigRawtx = self.nodes[2].signrawtransaction(rawtx)

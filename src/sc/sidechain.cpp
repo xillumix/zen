@@ -20,13 +20,14 @@ using namespace Sidechain;
 std::string ScInfo::ToString() const
 {
     std::string str;
-    str += strprintf("\nScInfo(balance=%s, creatingTxHash=%s, lastReceivedCertEpoch=%d, createdInBlock=%s, createdAtBlockHeight=%d, withdrawalEpochLength=%d)\n",
+    str += strprintf("\nScInfo(balance=%s, creatingTxHash=%s, lastReceivedCertEpoch=%d, createdInBlock=%s, createdAtBlockHeight=%d, withdrawalEpochLength=%d, customData=%s)\n",
             FormatMoney(balance),
             creationTxHash.ToString().substr(0,10),
             lastReceivedCertificateEpoch,
             creationBlockHash.ToString().substr(0,10),
             creationBlockHeight,
-            creationData.withdrawalEpochLength);
+            creationData.withdrawalEpochLength,
+            HexStr(creationData.customData));
 
     if (mImmatureAmounts.size() )
     {
@@ -71,37 +72,37 @@ bool ScCoinsView::checkTxSemanticValidity(const CTransaction& tx, CValidationSta
 
     LogPrint("sc", "%s():%d - tx=%s\n", __func__, __LINE__, txHash.ToString() );
 
-    BOOST_FOREACH(const auto& sc, tx.vsc_ccout)
+    CAmount cumulatedAmount = 0;
+
+    static const int SC_MIN_WITHDRAWAL_EPOCH_LENGTH = getScMinWithdrawalEpochLength();
+
+    for (const auto& sc : tx.vsc_ccout)
     {
-        // check there is at least one fwt associated with this scId
-        if (!anyForwardTransaction(tx, sc.scId) )
+        if (sc.withdrawalEpochLength < SC_MIN_WITHDRAWAL_EPOCH_LENGTH)
         {
-            LogPrint("sc", "%s():%d - Invalid tx[%s] : no fwd transactions associated to this creation\n",
-                __func__, __LINE__, txHash.ToString() );
-            return state.DoS(100, error("%s: no fwd transactions associated to this creation",
-                __func__), REJECT_INVALID, "sidechain-creation-missing-fwd-transfer");
+            LogPrint("sc", "%s():%d - Invalid tx[%s] : sc creation withdrawalEpochLength %d is non-positive\n",
+                __func__, __LINE__, txHash.ToString(), sc.withdrawalEpochLength);
+            return state.DoS(100, error("%s: sc creation withdrawalEpochLength is not valid",
+                __func__), REJECT_INVALID, "sidechain-sc-creation-epoch-not-valid");
+        }
+
+        if (!sc.CheckAmountRange(cumulatedAmount) )
+        {
+            LogPrint("sc", "%s():%d - Invalid tx[%s] : sc creation amount is non-positive or larger than %s\n",
+                __func__, __LINE__, txHash.ToString(), FormatMoney(MAX_MONEY) );
+            return state.DoS(100, error("%s: sc creation amount is outside range",
+                __func__), REJECT_INVALID, "sidechain-sc-creation-amount-outside-range");
         }
     }
 
-    CAmount cumulatedFwdAmount = 0;
-    BOOST_FOREACH(const auto& sc, tx.vft_ccout)
+    for (const auto& ft : tx.vft_ccout)
     {
-        if (sc.nValue == CAmount(0) || !MoneyRange(sc.nValue))
+        if (!ft.CheckAmountRange(cumulatedAmount) )
         {
-            LogPrint("sc", "%s():%d - Invalid tx[%s] : fwd trasfer amount is non-positive or larger than %s\n",
+            LogPrint("sc", "%s():%d - Invalid tx[%s] : sc creation amount is non-positive or larger than %s\n",
                 __func__, __LINE__, txHash.ToString(), FormatMoney(MAX_MONEY) );
-            return state.DoS(100, error("%s: fwd trasfer amount is outside range",
-                __func__), REJECT_INVALID, "sidechain-fwd-transfer-amount-outside-range");
-        }
-
-        cumulatedFwdAmount += sc.nValue;
-        if (!MoneyRange(cumulatedFwdAmount))
-        {
-            LogPrint("sc", "%s():%d - Invalid tx[%s] : cumulated fwd trasfers amount is outside range\n",
-                __func__, __LINE__, txHash.ToString() );
-            return state.DoS(100, error("%s: cumulated fwd trasfers amount is outside range",
-                __func__), REJECT_INVALID, "sidechain-fwd-transfer-amount-outside-range");
-
+            return state.DoS(100, error("%s: sc creation amount is outside range",
+                __func__), REJECT_INVALID, "sidechain-sc-creation-amount-outside-range");
         }
     }
 
@@ -491,6 +492,9 @@ bool ScCoinsViewCache::UpdateScInfo(const CTransaction& tx, const CBlock& block,
     const uint256& txHash = tx.GetHash();
     LogPrint("sc", "%s():%d - enter tx=%s\n", __func__, __LINE__, txHash.ToString() );
 
+    static const int SC_COIN_MATURITY = getScCoinsMaturity();
+    const int maturityHeight = blockHeight + SC_COIN_MATURITY;
+
     // creation ccout
     BOOST_FOREACH(const auto& cr, tx.vsc_ccout)
     {
@@ -507,14 +511,18 @@ bool ScCoinsViewCache::UpdateScInfo(const CTransaction& tx, const CBlock& block,
         scInfo.creationTxHash = txHash;
         scInfo.lastReceivedCertificateEpoch = EPOCH_NULL;
         scInfo.creationData.withdrawalEpochLength = cr.withdrawalEpochLength;
+        scInfo.creationData.customData = cr.customData;
+
+        // add a new immature balance entry in sc info
+        scInfo.mImmatureAmounts[maturityHeight] = cr.nValue;
+
+        LogPrint("sc", "%s():%d - immature balance added in scView (h=%d, amount=%s) %s\n",
+            __func__, __LINE__, maturityHeight, FormatMoney(cr.nValue), cr.scId.ToString());
 
         mUpdatedOrNewScInfoList[cr.scId] = scInfo;
 
         LogPrint("sc", "%s():%d - scId[%s] added in scView\n", __func__, __LINE__, cr.scId.ToString() );
     }
-
-    static const int SC_COIN_MATURITY = getScCoinsMaturity();
-    const int maturityHeight = blockHeight + SC_COIN_MATURITY;
 
     // forward transfer ccout
     BOOST_FOREACH(auto& ft, tx.vft_ccout)
@@ -619,40 +627,12 @@ bool ScCoinsViewCache::RevertTxOutputs(const CTransaction& tx, int nHeight)
             return false;
         }
 
-        // get the map of immature amounts, they are indexed by height
-        auto& iaMap = targetScInfo.mImmatureAmounts;
-
-        if (!iaMap.count(maturityHeight) )
+        if (!DecrementImmatureAmount(scId, targetScInfo, entry.nValue, maturityHeight) )
         {
             // should not happen
-            LogPrint("sc", "ERROR %s():%d - scId=%s could not find immature balance at height%d\n",
+            LogPrint("sc", "ERROR %s():%d - scId=%s could not handle immature balance at height%d\n",
                 __func__, __LINE__, scId.ToString(), maturityHeight);
             return false;
-        }
-
-        LogPrint("sc", "%s():%d - immature amount before: %s\n",
-            __func__, __LINE__, FormatMoney(iaMap[maturityHeight]));
-
-        if (iaMap[maturityHeight] < entry.nValue)
-        {
-            // should not happen either
-            LogPrint("sc", "ERROR %s():%d - scId=%s negative balance at height=%d\n",
-                __func__, __LINE__, scId.ToString(), maturityHeight);
-            return false;
-        }
-
-        iaMap[maturityHeight] -= entry.nValue;
-        mUpdatedOrNewScInfoList[scId] = targetScInfo;
-
-        LogPrint("sc", "%s():%d - immature amount after: %s\n",
-            __func__, __LINE__, FormatMoney(iaMap[maturityHeight]));
-
-        if (iaMap[maturityHeight] == 0)
-        {
-            iaMap.erase(maturityHeight);
-            mUpdatedOrNewScInfoList[scId] = targetScInfo;
-            LogPrint("sc", "%s():%d - removed entry height=%d from immature amounts in memory\n",
-                __func__, __LINE__, maturityHeight );
         }
     }
 
@@ -671,6 +651,14 @@ bool ScCoinsViewCache::RevertTxOutputs(const CTransaction& tx, int nHeight)
             return false;
         }
 
+        if (!DecrementImmatureAmount(scId, targetScInfo, entry.nValue, maturityHeight) )
+        {
+            // should not happen
+            LogPrint("sc", "ERROR %s():%d - scId=%s could not handle immature balance at height%d\n",
+                __func__, __LINE__, scId.ToString(), maturityHeight);
+            return false;
+        }
+
         if (targetScInfo.balance > 0)
         {
             // should not happen either
@@ -683,6 +671,46 @@ bool ScCoinsViewCache::RevertTxOutputs(const CTransaction& tx, int nHeight)
         sDeletedScList.insert(scId);
 
         LogPrint("sc", "%s():%d - scId=%s removed from scView\n", __func__, __LINE__, scId.ToString() );
+    }
+    return true;
+}
+
+bool ScCoinsViewCache::DecrementImmatureAmount(const uint256& scId, ScInfo& targetScInfo, CAmount nValue, int maturityHeight)
+{
+    // get the map of immature amounts, they are indexed by height
+    auto& iaMap = targetScInfo.mImmatureAmounts;
+
+    if (!iaMap.count(maturityHeight) )
+    {
+        // should not happen
+        LogPrint("sc", "ERROR %s():%d - could not find immature balance at height%d\n",
+            __func__, __LINE__, maturityHeight);
+        return false;
+    }
+
+    LogPrint("sc", "%s():%d - immature amount before: %s\n",
+        __func__, __LINE__, FormatMoney(iaMap[maturityHeight]));
+
+    if (iaMap[maturityHeight] < nValue)
+    {
+        // should not happen either
+        LogPrint("sc", "ERROR %s():%d - negative balance at height=%d\n",
+            __func__, __LINE__, maturityHeight);
+        return false;
+    }
+
+    iaMap[maturityHeight] -= nValue;
+    mUpdatedOrNewScInfoList[scId] = targetScInfo;
+
+    LogPrint("sc", "%s():%d - immature amount after: %s\n",
+        __func__, __LINE__, FormatMoney(iaMap[maturityHeight]));
+
+    if (iaMap[maturityHeight] == 0)
+    {
+        iaMap.erase(maturityHeight);
+        mUpdatedOrNewScInfoList[scId] = targetScInfo;
+        LogPrint("sc", "%s():%d - removed entry height=%d from immature amounts in memory\n",
+            __func__, __LINE__, maturityHeight );
     }
     return true;
 }
@@ -1004,6 +1032,14 @@ bool ScMgr::epochAlreadyHasCertificate(const uint256& scId, int epochNumber, con
     return false;
 }
 
+void ScMgr::generateNewSidechainId(uint256& scId)
+{
+    // for the time being this is randomly generated
+    // in future a CMutableTransaction can be passed as input parameter in order to use its parts
+    // for generating it in a deterministic way
+    scId = GetRandHash();
+}
+
 bool ScMgr::isLegalEpoch(const uint256& scId, int epochNumber, const uint256& endEpochBlockHash)
 {
     if (epochNumber <= 0)
@@ -1136,6 +1172,7 @@ bool ScMgr::dump_info(const uint256& scId)
     LogPrint("sc", "  balance[%s]\n", FormatMoney(info.balance));
     LogPrint("sc", "  ----- creation data:\n");
     LogPrint("sc", "      withdrawalEpochLength[%d]\n", info.creationData.withdrawalEpochLength);
+    LogPrint("sc", "      customData[%s]\n", HexStr(info.creationData.customData));
     LogPrint("sc", "  immature amounts size[%d]\n", info.mImmatureAmounts.size());
 // TODO    LogPrint("sc", "      ...more to come...\n");
 
@@ -1291,7 +1328,8 @@ void DbPersistance::dump_info()
                 << "  creating tx hash: " << info.creationTxHash.ToString() << std::endl
                 << "  last recv cert epoch: " << info.lastReceivedCertificateEpoch << std::endl
                 // creation parameters
-                << "  withdrawalEpochLength: " << info.creationData.withdrawalEpochLength << std::endl;
+                << "  withdrawalEpochLength: " << info.creationData.withdrawalEpochLength << std::endl
+                << "  customData: " << HexStr(info.creationData.customData) << std::endl;
         }
         else
         {
