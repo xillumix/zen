@@ -12,7 +12,7 @@ import os
 from decimal import Decimal
 
 NUMB_OF_NODES = 3
-DEBUG_MODE = 0
+DEBUG_MODE = 1
 SC_COINS_MAT = 2
 
 
@@ -134,28 +134,6 @@ class SCCreateTest(BitcoinTestFramework):
         assert_equal("amount must be positive" in errorString, True)
 
         # ---------------------------------------------------------------------------------------
-        # Node 1 try create a SC with no amount
-        mark_logs("\nNode 1 try creates a SC with no amount", self.nodes, DEBUG_MODE)
-
-        try:
-            self.nodes[1].sc_create("24", 123, [{"address": "ada"}])
-        except JSONRPCException, e:
-            errorString = e.error['message']
-            mark_logs(errorString, self.nodes, DEBUG_MODE)
-        assert_equal("Amount is not a number or string" in errorString, True)
-
-        # ---------------------------------------------------------------------------------------
-        # Node 1 try create a SC with negative epocLength
-        mark_logs("\nNode 1 try creates a SC with 0 epocLength", self.nodes, DEBUG_MODE)
-
-        try:
-            txbad = self.nodes[1].sc_create("24", -1, "ada", Decimal("1.0"), "101010101010")
-            print self.nodes[1].getrawtransaction(txbad, 1)['vsc_ccout']
-        except JSONRPCException, e:
-            errorString = e.error['message']
-            mark_logs(errorString, self.nodes, DEBUG_MODE)
-
-        # ---------------------------------------------------------------------------------------
         # Node 1 try create a SC with a bad custom data
         mark_logs("\nNode 1 try creates a SC with a bad custom data", self.nodes, DEBUG_MODE)
 
@@ -189,6 +167,17 @@ class SCCreateTest(BitcoinTestFramework):
             errorString = e.error['message']
             mark_logs(errorString, self.nodes, DEBUG_MODE)
         assert_equal("Invalid customData length" in errorString, True)
+
+        # ---------------------------------------------------------------------------------------
+        # Node 1 try create a SC with negative epocLength
+        mark_logs("\nNode 1 try creates a SC with 0 epocLength", self.nodes, DEBUG_MODE)
+
+        try:
+            txbad = self.nodes[1].sc_create("24", -1, "ada", Decimal("1.0"), "101010101010")
+            print self.nodes[1].getrawtransaction(txbad, 1)['vsc_ccout']
+        except JSONRPCException, e:
+            errorString = e.error['message']
+            mark_logs(errorString, self.nodes, DEBUG_MODE)
 
         # ---------------------------------------------------------------------------------------
         # Node 1 create the SC
