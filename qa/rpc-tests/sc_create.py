@@ -187,7 +187,7 @@ class SCCreateTest(BitcoinTestFramework):
         self.nodes[1].sc_create(scid, 123, "dada", creation_amount, cdField)
         self.sync_all()
 
-        mark_logs("\n...Node0 generating 1 block",self.nodes, DEBUG_MODE)
+        mark_logs("\n...Node0 generating 1 block", self.nodes, DEBUG_MODE)
         self.nodes[0].generate(1)
         self.sync_all()
 
@@ -221,7 +221,7 @@ class SCCreateTest(BitcoinTestFramework):
         mark_logs("\nCheck maturiy of the coins", self.nodes, DEBUG_MODE)
 
         dump_sc_info_record(self.nodes[2].getscinfo(scid), 2, DEBUG_MODE)
-        mark_logs ("Check that %f coins will be mature at h=%d" % (creation_amount, curh + 2), self.nodes, DEBUG_MODE)
+        mark_logs("Check that %f coins will be mature at h=%d" % (creation_amount, curh + 2), self.nodes, DEBUG_MODE)
         ia = self.nodes[2].getscinfo(scid)["immature amounts"]
         for entry in ia:
             if entry["maturityHeight"] == curh + SC_COINS_MAT:
@@ -253,7 +253,7 @@ class SCCreateTest(BitcoinTestFramework):
         dump_sc_info_record(self.nodes[2].getscinfo(scid), 2, DEBUG_MODE)
         count = 0
         mark_logs("Check that %f coins will be mature at h=%d" % (creation_amount, curh + 1), self.nodes, DEBUG_MODE)
-        mark_logs ("Check that %f coins will be mature at h=%d" % (fwt_amount_many + fwt_amount_1, curh + 2), self.nodes, DEBUG_MODE)
+        mark_logs("Check that %f coins will be mature at h=%d" % (fwt_amount_many + fwt_amount_1, curh + 2), self.nodes, DEBUG_MODE)
         ia = self.nodes[2].getscinfo(scid)["immature amounts"]
         for entry in ia:
             count += 1
@@ -289,7 +289,7 @@ class SCCreateTest(BitcoinTestFramework):
         self.sync_all()
 
         dump_sc_info_record(self.nodes[2].getscinfo(scid), 2, DEBUG_MODE)
-        mark_logs ("Check that there are no immature coins", self.nodes, DEBUG_MODE)
+        mark_logs("Check that there are no immature coins", self.nodes, DEBUG_MODE)
         ia = self.nodes[2].getscinfo(scid)["immature amounts"]
         assert_equal(len(ia), 0)
 

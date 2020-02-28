@@ -6,28 +6,23 @@
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.authproxy import JSONRPCException
 from test_framework.util import assert_true, assert_false, assert_equal, initialize_chain_clean, \
-    start_nodes, start_node, connect_nodes, stop_node, stop_nodes, \
-    sync_blocks, sync_mempools, connect_nodes_bi, wait_bitcoinds, mark_logs, dump_ordered_tips
-import traceback
-import os,sys
-import shutil
-from random import randint
+    start_nodes, sync_blocks, sync_mempools, connect_nodes_bi, mark_logs, dump_ordered_tips
+import os
 from decimal import Decimal
-import logging
 import pprint
 
 import time
 
-
 DEBUG_MODE = 1
 EPOCH_LENGTH = 5
+
 
 class sc_cert_invalidate(BitcoinTestFramework):
 
     alert_filename = None
 
     def setup_chain(self, split=False):
-        print("Initializing test directory "+self.options.tmpdir)
+        print("Initializing test directory " + self.options.tmpdir)
         initialize_chain_clean(self.options.tmpdir, 3)
         self.alert_filename = os.path.join(self.options.tmpdir, "alert.txt")
         with open(self.alert_filename, 'w'):
@@ -37,7 +32,7 @@ class sc_cert_invalidate(BitcoinTestFramework):
         self.nodes = []
 
         self.nodes = start_nodes(3, self.options.tmpdir, extra_args=
-            [['-debug=py', '-debug=sc', '-debug=mempool', '-debug=net', '-debug=cert', '-logtimemicros=1', '-disablesafemode=1']] * 3 )
+            [['-debug=py', '-debug=sc', '-debug=mempool', '-debug=net', '-debug=cert', '-logtimemicros=1', '-disablesafemode=1']] * 3)
 
         connect_nodes_bi(self.nodes, 0, 1)
         connect_nodes_bi(self.nodes, 1, 2)
@@ -47,7 +42,7 @@ class sc_cert_invalidate(BitcoinTestFramework):
         self.sync_all()
 
     def disconnect_nodes(self, from_connection, node_num):
-        ip_port = "127.0.0.1:"+str(p2p_port(node_num))
+        ip_port = "127.0.0.1:" + str(p2p_port(node_num))
         from_connection.disconnectnode(ip_port)
         # poll until version handshake complete to avoid race conditions
         # with transaction relaying
@@ -62,22 +57,22 @@ class sc_cert_invalidate(BitcoinTestFramework):
         sc_txes = []
         certs = []
 
-        #forward transfer amount
+        # forward transfer amount
         creation_amount = Decimal("0.5")
-        fwt_amount_1    = Decimal("1000.0")
-        fwt_amount_2    = Decimal("1.0")
-        fwt_amount_3    = Decimal("2.0")
-        fwt_amount_4    = Decimal("3.0")
+        fwt_amount_1 = Decimal("1000.0")
+        fwt_amount_2 = Decimal("1.0")
+        fwt_amount_3 = Decimal("2.0")
+        fwt_amount_4 = Decimal("3.0")
 
-        bwt_amount_1    = Decimal("8.0")
-        bwt_amount_2    = Decimal("8.5")
+        bwt_amount_1 = Decimal("8.0")
+        bwt_amount_2 = Decimal("8.5")
 
         sc_info = []
         balance_node0 = []
 
-        # node 1 earns some coins, they would be available after 100 blocks 
+        # node 1 earns some coins, they would be available after 100 blocks
         mark_logs("Node 1 generates 1 block", self.nodes, DEBUG_MODE)
-        self.nodes[0].generate(1) # TODO this is not 1
+        self.nodes[0].generate(1)  # TODO this is not 1
         self.sync_all()
 
         mark_logs("Node 0 generates 220 block", self.nodes, DEBUG_MODE)
@@ -140,13 +135,13 @@ class sc_cert_invalidate(BitcoinTestFramework):
         mark_logs("##### End epoch block = {}".format(self.nodes[0].getbestblockhash()), self.nodes, DEBUG_MODE)
 
         current_height = self.nodes[0].getblockcount()
-        ep_n_0      = int((current_height - sc_creating_height + 1) / EPOCH_LENGTH) - 1
-        ep_height_0 = sc_creating_height - 1 + ((ep_n_0 + 1)*EPOCH_LENGTH)
-        ep_hash_0   = self.nodes[0].getblockhash(ep_height_0)
+        ep_n_0 = int((current_height - sc_creating_height + 1) / EPOCH_LENGTH) - 1
+        ep_height_0 = sc_creating_height - 1 + ((ep_n_0 + 1) * EPOCH_LENGTH)
+        ep_hash_0 = self.nodes[0].getblockhash(ep_height_0)
 
-        mark_logs(("Node 0 performs a bwd transfer of %s coins to Node1 epn=%d, eph[%s]..."%(str(bwt_amount_1), ep_n_0, ep_hash_0)), self.nodes, DEBUG_MODE)
+        mark_logs(("Node 0 performs a bwd transfer of %s coins to Node1 epn=%d, eph[%s]..." % (str(bwt_amount_1), ep_n_0, ep_hash_0)), self.nodes, DEBUG_MODE)
         amounts = []
-        amounts.append( {"pubkeyhash":pkh_node1, "amount": bwt_amount_1})
+        amounts.append({"pubkeyhash": pkh_node1, "amount": bwt_amount_1})
         cert = self.nodes[0].send_certificate(scid, ep_n_0, ep_hash_0, amounts)
         mark_logs("cert = {}".format(cert), self.nodes, DEBUG_MODE)
         certs.append(cert)
@@ -216,12 +211,12 @@ class sc_cert_invalidate(BitcoinTestFramework):
         current_height = self.nodes[0].getblockcount()
 
         ep_n_1 = int((current_height - sc_creating_height + 1) / EPOCH_LENGTH) - 1
-        ep_height_1 = sc_creating_height - 1 + ((ep_n_1+1)*EPOCH_LENGTH)
+        ep_height_1 = sc_creating_height - 1 + ((ep_n_1 + 1) * EPOCH_LENGTH)
         ep_hash_1 = self.nodes[0].getblockhash(ep_height_1)
 
-        mark_logs(("Node 0 performs a bwd transfer of %s coins to Node1 epn=%d, eph[%s]..."%(str(bwt_amount_2), ep_n_1, ep_hash_1)), self.nodes, DEBUG_MODE)
+        mark_logs(("Node 0 performs a bwd transfer of %s coins to Node1 epn=%d, eph[%s]..." % (str(bwt_amount_2), ep_n_1, ep_hash_1)), self.nodes, DEBUG_MODE)
         amounts = []
-        amounts.append( {"pubkeyhash":pkh_node2, "amount": bwt_amount_2})
+        amounts.append({"pubkeyhash": pkh_node2, "amount": bwt_amount_2})
         cert = self.nodes[0].send_certificate(scid, ep_n_1, ep_hash_1, amounts)
         mark_logs("cert = {}".format(cert), self.nodes, DEBUG_MODE)
         certs.append(cert)
@@ -243,7 +238,7 @@ class sc_cert_invalidate(BitcoinTestFramework):
 
         # invalidate all blocks one by one
         for j in range(0, len(sc_info)):
-            inv_hash   = self.nodes[0].getbestblockhash()
+            inv_hash = self.nodes[0].getbestblockhash()
             inv_heigth = self.nodes[0].getblockcount()
             mark_logs("Node 0 invalidates last block of height = {}".format(inv_heigth), self.nodes, DEBUG_MODE)
             self.nodes[0].invalidateblock(inv_hash)
@@ -259,11 +254,12 @@ class sc_cert_invalidate(BitcoinTestFramework):
                 assert_false(certs[1] in self.nodes[0].getrawmempool())
 
             # list are empty, exit loop
-            if (len(sc_info) == 0): break
+            if (len(sc_info) == 0):
+                break
 
             try:
-                assert_equal( self.nodes[0].getscinfo(scid), sc_info[-1]) 
-            except JSONRPCException,e:
+                assert_equal(self.nodes[0].getscinfo(scid), sc_info[-1])
+            except JSONRPCException, e:
                 errorString = e.error['message']
                 print errorString
                 if (inv_heigth > sc_creating_height):
@@ -281,7 +277,7 @@ class sc_cert_invalidate(BitcoinTestFramework):
 
         # if a coinbase used as input for a tx gets immature during invalidation, the tx is removed
         # from mempool and the assert fails
-        #for m in sc_txes:
+        # for m in sc_txes:
         #    # check that all sc transactions are in mempool
         #    assert_equal((m in mempool), True)
 
@@ -292,7 +288,7 @@ class sc_cert_invalidate(BitcoinTestFramework):
             print "amount=", a
             print "fee=   ", f
             print "___"
-            sc_amount += (a+f)
+            sc_amount += (a + f)
 
         # check that amounts related to sc txes in mempool (no certs) are the diff of the balances after reverting
         # the whole serie of blocks
@@ -304,8 +300,8 @@ class sc_cert_invalidate(BitcoinTestFramework):
 
         h0 = self.nodes[0].getblockcount()
         h1 = self.nodes[1].getblockcount()
-        delta = h1-(h0)
-        numbofblocks = int(delta*(delta+1)/2)
+        delta = h1 - (h0)
+        numbofblocks = int(delta * (delta + 1) / 2)
 
         mark_logs("Node0 generating {} more blocks for reverting the other chains".format(numbofblocks), self.nodes, DEBUG_MODE)
         self.nodes[0].generate(numbofblocks)
@@ -319,15 +315,16 @@ class sc_cert_invalidate(BitcoinTestFramework):
         print "Node1 balance: ", self.nodes[1].getbalance("", 0)
         print "Node2 balance: ", self.nodes[2].getbalance("", 0)
         print "=================================================="
-        print 
+        print
 
 #        assert_true
 
-        print 
+        print
         for i in range(0, 3):
             chaintips = self.nodes[i].getchaintips()
             dump_ordered_tips(chaintips, DEBUG_MODE)
             mark_logs("---", self.nodes, DEBUG_MODE)
+
 
 if __name__ == '__main__':
     sc_cert_invalidate().main()
