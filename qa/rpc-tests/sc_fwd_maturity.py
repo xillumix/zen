@@ -126,16 +126,15 @@ class headers(BitcoinTestFramework):
         fwt_amount_1 = Decimal("2.0")
         fwt_amount_2 = Decimal("2.0")
         fwt_amount_3 = Decimal("3.0")
-        fwt_amount_many  = fwt_amount_1 + fwt_amount_2 + fwt_amount_3
+        fwt_amount_many = fwt_amount_1 + fwt_amount_2 + fwt_amount_3
 
         #---------------------------------------------------------------------------------------
         print "Current height: ", self.nodes[2].getblockcount()
 
-        #raw_input("Press enter to create...")
         self.mark_logs("\nNode 1 creates SC 1 with "+str(creation_amount)+" coins")
         amounts = []
         amounts.append( {"address":"dada", "amount": creation_amount})
-        creating_tx_1 = self.nodes[1].sc_create(scid_1, 123, amounts);
+        creating_tx_1 = self.nodes[1].sc_create(scid_1, 123, "dada", creation_amount, "123ffffffff123")
         self.sync_all()
 
         self.mark_logs("\n...Node0 generating 1 block")
@@ -172,9 +171,9 @@ class headers(BitcoinTestFramework):
         self.mark_logs("\nNode 1 creates SC 2,3,4, all with "+str(creation_amount)+" coins")
         amounts = []
         amounts.append( {"address":"dada", "amount": creation_amount})
-        creating_tx_2 = self.nodes[1].sc_create(scid_2, 123, amounts);
-        creating_tx_2 = self.nodes[1].sc_create(scid_3, 123, amounts);
-        creating_tx_2 = self.nodes[1].sc_create(scid_4, 123, amounts);
+        creating_tx_2 = self.nodes[1].sc_create(scid_2, 123, "dada", creation_amount, "cdcdcd");
+        creating_tx_2 = self.nodes[1].sc_create(scid_3, 123, "dada", creation_amount, "ababab");
+        creating_tx_2 = self.nodes[1].sc_create(scid_4, 123, "dada", creation_amount, "efefef");
         self.sync_all()
 
         self.mark_logs("\n...Node0 generating 1 block")

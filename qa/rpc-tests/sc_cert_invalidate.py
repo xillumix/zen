@@ -88,9 +88,7 @@ class sc_cert_invalidate(BitcoinTestFramework):
         sc_info.append("No SC")
 
         mark_logs("Node 1 creates the SC spending {} coins ...".format(creation_amount), self.nodes, DEBUG_MODE)
-        amounts = []
-        amounts.append( {"address":"dada", "amount": creation_amount})
-        creating_tx = self.nodes[0].sc_create(scid, EPOCH_LENGTH, amounts);
+        creating_tx = self.nodes[0].sc_create(scid, EPOCH_LENGTH, "dada", creation_amount)
 
         mark_logs("creating_tx = {}".format(creating_tx), self.nodes, DEBUG_MODE)
         sc_txes.append(creating_tx)
@@ -105,7 +103,7 @@ class sc_cert_invalidate(BitcoinTestFramework):
         sc_info.append(self.nodes[0].getscinfo(scid))
 
         mark_logs("Node 0 performs a fwd transfer of {} coins to SC...".format(fwt_amount_1), self.nodes, DEBUG_MODE)
-        fwd_tx = self.nodes[0].sc_send("abcd", fwt_amount_1, scid);
+        fwd_tx = self.nodes[0].sc_send("abcd", fwt_amount_1, scid)
         print "fwd_tx=" + fwd_tx
         sc_txes.append(fwd_tx)
         self.sync_all()
@@ -117,8 +115,8 @@ class sc_cert_invalidate(BitcoinTestFramework):
         balance_node0.append(self.nodes[0].getbalance("", 0))
         sc_info.append(self.nodes[0].getscinfo(scid))
 
-        pkh_node1 = self.nodes[1].getnewaddress("", True);
-        pkh_node2 = self.nodes[2].getnewaddress("", True);
+        pkh_node1 = self.nodes[1].getnewaddress("", True)
+        pkh_node2 = self.nodes[2].getnewaddress("", True)
 
         mark_logs("Node0 generating 3 more blocks for achieving sc coins maturity", self.nodes, DEBUG_MODE)
         self.nodes[0].generate(1)
@@ -145,11 +143,11 @@ class sc_cert_invalidate(BitcoinTestFramework):
         ep_n_0      = int((current_height - sc_creating_height + 1) / EPOCH_LENGTH) - 1
         ep_height_0 = sc_creating_height - 1 + ((ep_n_0 + 1)*EPOCH_LENGTH)
         ep_hash_0   = self.nodes[0].getblockhash(ep_height_0)
-        
+
         mark_logs(("Node 0 performs a bwd transfer of %s coins to Node1 epn=%d, eph[%s]..."%(str(bwt_amount_1), ep_n_0, ep_hash_0)), self.nodes, DEBUG_MODE)
         amounts = []
         amounts.append( {"pubkeyhash":pkh_node1, "amount": bwt_amount_1})
-        cert = self.nodes[0].send_certificate(scid, ep_n_0, ep_hash_0, amounts);
+        cert = self.nodes[0].send_certificate(scid, ep_n_0, ep_hash_0, amounts)
         mark_logs("cert = {}".format(cert), self.nodes, DEBUG_MODE)
         certs.append(cert)
         self.sync_all()
@@ -162,7 +160,7 @@ class sc_cert_invalidate(BitcoinTestFramework):
         sc_info.append(self.nodes[0].getscinfo(scid))
 
         mark_logs("Node 0 performs a fwd transfer of {} coins to SC...".format(fwt_amount_2), self.nodes, DEBUG_MODE)
-        fwd_tx = self.nodes[0].sc_send("abcd", fwt_amount_2, scid);
+        fwd_tx = self.nodes[0].sc_send("abcd", fwt_amount_2, scid)
         mark_logs("fwd_tx = {}".format(fwd_tx), self.nodes, DEBUG_MODE)
         sc_txes.append(fwd_tx)
         self.sync_all()
@@ -175,7 +173,7 @@ class sc_cert_invalidate(BitcoinTestFramework):
         sc_info.append(self.nodes[0].getscinfo(scid))
 
         mark_logs("Node 0 performs a fwd transfer of {} coins to SC...".format(fwt_amount_3), self.nodes, DEBUG_MODE)
-        fwd_tx = self.nodes[0].sc_send("abcd", fwt_amount_3, scid);
+        fwd_tx = self.nodes[0].sc_send("abcd", fwt_amount_3, scid)
         mark_logs("fwd_tx = {}".format(fwd_tx), self.nodes, DEBUG_MODE)
         sc_txes.append(fwd_tx)
         self.sync_all()
@@ -188,7 +186,7 @@ class sc_cert_invalidate(BitcoinTestFramework):
         sc_info.append(self.nodes[0].getscinfo(scid))
 
         mark_logs("Node 0 performs a fwd transfer of {} coins to SC...".format(fwt_amount_4), self.nodes, DEBUG_MODE)
-        fwd_tx = self.nodes[0].sc_send("abcd", fwt_amount_4, scid);
+        fwd_tx = self.nodes[0].sc_send("abcd", fwt_amount_4, scid)
         mark_logs("fwd_tx = {}".format(fwd_tx), self.nodes, DEBUG_MODE)
         sc_txes.append(fwd_tx)
         self.sync_all()
@@ -224,7 +222,7 @@ class sc_cert_invalidate(BitcoinTestFramework):
         mark_logs(("Node 0 performs a bwd transfer of %s coins to Node1 epn=%d, eph[%s]..."%(str(bwt_amount_2), ep_n_1, ep_hash_1)), self.nodes, DEBUG_MODE)
         amounts = []
         amounts.append( {"pubkeyhash":pkh_node2, "amount": bwt_amount_2})
-        cert = self.nodes[0].send_certificate(scid, ep_n_1, ep_hash_1, amounts);
+        cert = self.nodes[0].send_certificate(scid, ep_n_1, ep_hash_1, amounts)
         mark_logs("cert = {}".format(cert), self.nodes, DEBUG_MODE)
         certs.append(cert)
         self.sync_all()
