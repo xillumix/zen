@@ -524,6 +524,9 @@ bool CCoinsViewCache::UpdateScInfo(const CTransaction& tx, const CBlock& block, 
     const uint256& txHash = tx.GetHash();
     LogPrint("sc", "%s():%d - enter tx=%s\n", __func__, __LINE__, txHash.ToString() );
 
+    static const int SC_COIN_MATURITY = getScCoinsMaturity();
+    const int maturityHeight = blockHeight + SC_COIN_MATURITY;
+
     // creation ccout
     for (const auto& cr: tx.vsc_ccout)
     {
@@ -539,14 +542,16 @@ bool CCoinsViewCache::UpdateScInfo(const CTransaction& tx, const CBlock& block, 
         scInfo.creationTxHash = txHash;
         scInfo.lastReceivedCertificateEpoch = CScCertificate::EPOCH_NULL;
         scInfo.creationData.withdrawalEpochLength = cr.withdrawalEpochLength;
+        scInfo.creationData.customData = cr.customData;
+        scInfo.mImmatureAmounts[maturityHeight] = cr.nValue;
+
+        LogPrint("sc", "%s():%d - immature balance added in scView (h=%d, amount=%s) %s\n",
+            __func__, __LINE__, maturityHeight, FormatMoney(cr.nValue), cr.scId.ToString());
 
         cacheSidechains[cr.scId] = CSidechainsCacheEntry(scInfo, CSidechainsCacheEntry::Flags::FRESH);
 
         LogPrint("sc", "%s():%d - scId[%s] added in scView\n", __func__, __LINE__, cr.scId.ToString() );
     }
-
-    static const int SC_COIN_MATURITY = getScCoinsMaturity();
-    const int maturityHeight = blockHeight + SC_COIN_MATURITY;
 
     // forward transfer ccout
     for(auto& ft: tx.vft_ccout)
@@ -591,40 +596,12 @@ bool CCoinsViewCache::RevertTxOutputs(const CTransaction& tx, int nHeight)
             return false;
         }
 
-        // get the map of immature amounts, they are indexed by height
-        auto& iaMap = targetScInfo.mImmatureAmounts;
-
-        if (!iaMap.count(maturityHeight) )
+        if (!DecrementImmatureAmount(scId, targetScInfo, entry.nValue, maturityHeight) )
         {
             // should not happen
-            LogPrint("sc", "ERROR %s():%d - scId=%s could not find immature balance at height%d\n",
+            LogPrint("sc", "ERROR %s():%d - scId=%s could not handle immature balance at height%d\n",
                 __func__, __LINE__, scId.ToString(), maturityHeight);
             return false;
-        }
-
-        LogPrint("sc", "%s():%d - immature amount before: %s\n",
-            __func__, __LINE__, FormatMoney(iaMap[maturityHeight]));
-
-        if (iaMap[maturityHeight] < entry.nValue)
-        {
-            // should not happen either
-            LogPrint("sc", "ERROR %s():%d - scId=%s negative balance at height=%d\n",
-                __func__, __LINE__, scId.ToString(), maturityHeight);
-            return false;
-        }
-
-        iaMap[maturityHeight] -= entry.nValue;
-        cacheSidechains[scId] = CSidechainsCacheEntry(targetScInfo, CSidechainsCacheEntry::Flags::DIRTY);
-
-        LogPrint("sc", "%s():%d - immature amount after: %s\n",
-            __func__, __LINE__, FormatMoney(iaMap[maturityHeight]));
-
-        if (iaMap[maturityHeight] == 0)
-        {
-            iaMap.erase(maturityHeight);
-            cacheSidechains[scId] = CSidechainsCacheEntry(targetScInfo, CSidechainsCacheEntry::Flags::DIRTY);
-            LogPrint("sc", "%s():%d - removed entry height=%d from immature amounts in memory\n",
-                __func__, __LINE__, maturityHeight );
         }
     }
 
@@ -640,6 +617,14 @@ bool CCoinsViewCache::RevertTxOutputs(const CTransaction& tx, int nHeight)
         {
             // should not happen
             LogPrint("sc", "ERROR: %s():%d - scId=%s not in scView\n", __func__, __LINE__, scId.ToString() );
+            return false;
+        }
+
+        if (!DecrementImmatureAmount(scId, targetScInfo, entry.nValue, maturityHeight) )
+        {
+            // should not happen
+            LogPrint("sc", "ERROR %s():%d - scId=%s could not handle immature balance at height%d\n",
+                __func__, __LINE__, scId.ToString(), maturityHeight);
             return false;
         }
 
@@ -996,6 +981,54 @@ bool CCoinsViewCache::Flush() {
     return fOk;
 }
 
+bool CCoinsViewCache::DecrementImmatureAmount(const uint256& scId, ScInfo& targetScInfo, CAmount nValue, int maturityHeight)
+{
+    // get the map of immature amounts, they are indexed by height
+    auto& iaMap = targetScInfo.mImmatureAmounts;
+
+    if (!iaMap.count(maturityHeight) )
+    {
+        // should not happen
+        LogPrint("sc", "ERROR %s():%d - could not find immature balance at height%d\n",
+            __func__, __LINE__, maturityHeight);
+        return false;
+    }
+
+    LogPrint("sc", "%s():%d - immature amount before: %s\n",
+        __func__, __LINE__, FormatMoney(iaMap[maturityHeight]));
+
+    if (iaMap[maturityHeight] < nValue)
+    {
+        // should not happen either
+        LogPrint("sc", "ERROR %s():%d - negative balance at height=%d\n",
+            __func__, __LINE__, maturityHeight);
+        return false;
+    }
+
+    iaMap[maturityHeight] -= nValue;
+    cacheSidechains[scId] = CSidechainsCacheEntry(targetScInfo, CSidechainsCacheEntry::Flags::DIRTY);
+
+    LogPrint("sc", "%s():%d - immature amount after: %s\n",
+        __func__, __LINE__, FormatMoney(iaMap[maturityHeight]));
+
+    if (iaMap[maturityHeight] == 0)
+    {
+        iaMap.erase(maturityHeight);
+        cacheSidechains[scId] = CSidechainsCacheEntry(targetScInfo, CSidechainsCacheEntry::Flags::DIRTY);
+        LogPrint("sc", "%s():%d - removed entry height=%d from immature amounts in memory\n",
+            __func__, __LINE__, maturityHeight );
+    }
+    return true;
+}
+
+void CCoinsViewCache::generateNewSidechainId(uint256& scId)
+{
+    // for the time being this is randomly generated
+    // in future a CMutableTransaction can be passed as input parameter in order to use its parts
+    // for generating it in a deterministic way
+    scId = GetRandHash();
+}
+
 void CCoinsViewCache::Dump_info() const
 {
     std::set<uint256> scIdsList;
@@ -1017,6 +1050,7 @@ void CCoinsViewCache::Dump_info() const
         LogPrint("sc", "  balance[%s]\n", FormatMoney(info.balance));
         LogPrint("sc", "  ----- creation data:\n");
         LogPrint("sc", "      withdrawalEpochLength[%d]\n", info.creationData.withdrawalEpochLength);
+        LogPrint("sc", "      customData[%s]\n", HexStr(info.creationData.customData));
         LogPrint("sc", "  immature amounts size[%d]\n", info.mImmatureAmounts.size());
     }
 

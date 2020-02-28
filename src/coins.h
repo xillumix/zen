@@ -594,8 +594,12 @@ private:
     CCoinsMap::const_iterator FetchCoins(const uint256 &txid) const;
     CSidechainsMap::const_iterator FetchSidechains(const uint256& scId) const;
     bool hasScCreationOutput(const CTransaction& tx, const uint256& scId);
+
     static int getInitScCoinsMaturity();
     int getScCoinsMaturity();
+
+    bool DecrementImmatureAmount(const uint256& scId, ScInfo& targetScInfo, CAmount nValue, int maturityHeight);
+    static void generateNewSidechainId(uint256& scId);
     void Dump_info() const;
 
 private:
