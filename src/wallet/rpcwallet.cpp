@@ -43,8 +43,6 @@ using namespace std;
 using namespace libzcash;
 using namespace Sidechain;
 
-extern UniValue TxJoinSplitToJSON(const CTransaction& tx);
-
 int64_t nWalletUnlockTime;
 static CCriticalSection cs_nWalletUnlockTime;
 
