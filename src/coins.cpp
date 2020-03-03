@@ -389,7 +389,10 @@ bool CCoinsViewCache::BatchWrite(CCoinsMap &mapCoins,
 
         switch (entryToWrite.second.flag) {
             case CSidechainsCacheEntry::Flags::FRESH:
-                assert(itLocalCacheEntry == cacheSidechains.end()); //A fresh entry should not exist in localCache
+                assert(
+                       itLocalCacheEntry == cacheSidechains.end() ||
+                       itLocalCacheEntry->second.flag == CSidechainsCacheEntry::Flags::ERASED
+                ); //A fresh entry should not exist in localCache or be already erased
                 cacheSidechains[entryToWrite.first] = entryToWrite.second;
                 break;
             case CSidechainsCacheEntry::Flags::DIRTY:               //A dirty entry may or may not exist in localCache
@@ -567,7 +570,11 @@ bool CCoinsViewCache::UpdateScInfo(const CTransaction& tx, const CBlock& block, 
 
         // add a new immature balance entry in sc info or increment it if already there
         targetScInfo.mImmatureAmounts[maturityHeight] += ft.nValue;
-        cacheSidechains[ft.scId] = CSidechainsCacheEntry(targetScInfo, CSidechainsCacheEntry::Flags::DIRTY);
+        assert(cacheSidechains.count(ft.scId) != 0);
+        if (cacheSidechains[ft.scId].flag == CSidechainsCacheEntry::Flags::FRESH)
+            cacheSidechains[ft.scId] = CSidechainsCacheEntry(targetScInfo, CSidechainsCacheEntry::Flags::FRESH);
+        else
+            cacheSidechains[ft.scId] = CSidechainsCacheEntry(targetScInfo, CSidechainsCacheEntry::Flags::DIRTY);
 
         LogPrint("sc", "%s():%d - immature balance added in scView (h=%d, amount=%s) %s\n",
             __func__, __LINE__, maturityHeight, FormatMoney(ft.nValue), ft.scId.ToString());
