@@ -35,11 +35,9 @@ class sc_rawcert(BitcoinTestFramework):
         self.nodes = start_nodes(NUMB_OF_NODES, self.options.tmpdir, extra_args=
             [['-debug=py', '-debug=sc', '-debug=mempool', '-debug=net', '-debug=cert', '-logtimemicros=1', '-txindex=1', '-zapwallettxes=2']] * NUMB_OF_NODES)
 
-        idx = 0
-        for nod in self.nodes:
+        for idx, _ in enumerate(self.nodes):
             if idx < (NUMB_OF_NODES - 1):
                 connect_nodes_bi(self.nodes, idx, idx + 1)
-                idx += 1
 
         sync_blocks(self.nodes[1:NUMB_OF_NODES])
         sync_mempools(self.nodes[1:NUMB_OF_NODES])
@@ -61,11 +59,11 @@ class sc_rawcert(BitcoinTestFramework):
 
         # forward transfer amount
         cr_amount = Decimal("2.0")
-        ft_amount = Decimal("5.0")
+        ft_amount = Decimal("3.0")
         bt_amount = Decimal("4.0")
         sc_amount = cr_amount + ft_amount
 
-        # node 1 earns some coins, they would be available after 100 blocks 
+        # node 1 earns some coins, they would be available after 100 blocks
         mark_logs("Node 1 generates 1 block", self.nodes, DEBUG_MODE)
         self.nodes[1].generate(1)
         self.sync_all()
@@ -80,7 +78,7 @@ class sc_rawcert(BitcoinTestFramework):
         # create a sc via createraw cmd
         mark_logs("Node 1 creates the SC spending " + str(sc_amount) + " coins ...", self.nodes, DEBUG_MODE)
         sc_address = "fade"
-        sc_cr = [{"scid": scid, "epoch_length": EPOCH_LENGTH, "amount":cr_amount, "address":sc_address, "customData":"badcaffe"}]
+        sc_cr = [{"scid": scid, "epoch_length": EPOCH_LENGTH, "amount": cr_amount, "address": sc_address, "customData": "badcaffe"}]
         sc_ft = [{"address": sc_address, "amount":ft_amount, "scid": scid}]
         raw_tx = self.nodes[1].createrawtransaction([], {}, sc_cr, sc_ft)
         funded_tx = self.nodes[1].fundrawtransaction(raw_tx)
@@ -90,22 +88,22 @@ class sc_rawcert(BitcoinTestFramework):
 
         mark_logs("Node0 generating 5 block", self.nodes, DEBUG_MODE)
         epn = 0
-        eph = self.nodes[0].generate(5)[-1]
+        eph = self.nodes[0].generate(EPOCH_LENGTH)[-1]
         self.sync_all()
 
-        #-------------------------- end epoch
+        # -------------------------- end epoch
 
         sc_funds_pre = self.nodes[3].getscinfo(scid)['balance']
 
-        pkh_node2 = self.nodes[2].getnewaddress("", True);
+        pkh_node2 = self.nodes[2].getnewaddress("", True)
         cert_fee = Decimal("0.00025")
 
         mark_logs("Node0 generating 2 block, overcoming safeguard", self.nodes, DEBUG_MODE)
         self.nodes[0].generate(2)
         self.sync_all()
 
-        raw_addresses = {pkh_node2:(bt_amount - cert_fee)}
-        raw_params = {"scid":scid, "endEpochBlockHash":eph, "totalAmount":bt_amount, "nonce":"abcd", "withdrawalEpochNumber":epn}
+        raw_addresses = {pkh_node2: (bt_amount - cert_fee)}
+        raw_params = {"scid": scid, "endEpochBlockHash": eph, "totalAmount": bt_amount, "nonce": "abcd", "withdrawalEpochNumber": epn}
         raw_cert = []
         cert = []
 
@@ -147,7 +145,7 @@ class sc_rawcert(BitcoinTestFramework):
         eph = self.nodes[0].generate(4)[-1]
         self.sync_all()
 
-        #-------------------------- end epoch
+        # -------------------------- end epoch
 
         sc_funds_post = self.nodes[3].getscinfo(scid)['balance']
         assert_equal(sc_funds_post, sc_funds_pre - bt_amount)
@@ -160,10 +158,10 @@ class sc_rawcert(BitcoinTestFramework):
         assert_equal(decoded_cert_pre_list, decoded_cert_post_list)
 
         mark_logs("check that SC balance has been decreased by the cert amount", self.nodes, DEBUG_MODE)
-        assert_equal(self.nodes[2].getscinfo(scid)['balance'], (ft_amount - bt_amount))
+        assert_equal(self.nodes[2].getscinfo(scid)['balance'], (sc_amount - bt_amount))
 
         raw_addresses = {}
-        raw_params = {"scid":scid, "endEpochBlockHash":eph, "totalAmount":cert_fee, "nonce":"abcd", "withdrawalEpochNumber":epn}
+        raw_params = {"scid": scid, "endEpochBlockHash": eph, "totalAmount": cert_fee, "nonce": "abcd", "withdrawalEpochNumber": epn}
         raw_cert = []
         cert = []
 

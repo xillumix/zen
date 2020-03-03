@@ -538,20 +538,18 @@ bool CCoinsViewCache::UpdateScInfo(const CTransaction& tx, const CBlock& block, 
             LogPrint("sc", "ERROR: %s():%d - CR: scId=%s already in scView\n", __func__, __LINE__, cr.scId.ToString() );
             return false;
         }
-
-        ScInfo scInfo;
-        scInfo.creationBlockHash = block.GetHash();
-        scInfo.creationBlockHeight = blockHeight;
-        scInfo.creationTxHash = txHash;
-        scInfo.lastReceivedCertificateEpoch = CScCertificate::EPOCH_NULL;
-        scInfo.creationData.withdrawalEpochLength = cr.withdrawalEpochLength;
-        scInfo.creationData.customData = cr.customData;
-        scInfo.mImmatureAmounts[maturityHeight] = cr.nValue;
+        assert(cacheSidechains.count(cr.scId) == 0);
+        cacheSidechains[cr.scId].scInfo.creationBlockHash = block.GetHash();
+        cacheSidechains[cr.scId].scInfo.creationBlockHeight = blockHeight;
+        cacheSidechains[cr.scId].scInfo.creationTxHash = txHash;
+        cacheSidechains[cr.scId].scInfo.lastReceivedCertificateEpoch = CScCertificate::EPOCH_NULL;
+        cacheSidechains[cr.scId].scInfo.creationData.withdrawalEpochLength = cr.withdrawalEpochLength;
+        cacheSidechains[cr.scId].scInfo.creationData.customData = cr.customData;
+        cacheSidechains[cr.scId].scInfo.mImmatureAmounts[maturityHeight] = cr.nValue;
+        cacheSidechains[cr.scId].flag = CSidechainsCacheEntry::Flags::FRESH;
 
         LogPrint("sc", "%s():%d - immature balance added in scView (h=%d, amount=%s) %s\n",
             __func__, __LINE__, maturityHeight, FormatMoney(cr.nValue), cr.scId.ToString());
-
-        cacheSidechains[cr.scId] = CSidechainsCacheEntry(scInfo, CSidechainsCacheEntry::Flags::FRESH);
 
         LogPrint("sc", "%s():%d - scId[%s] added in scView\n", __func__, __LINE__, cr.scId.ToString() );
     }
@@ -559,8 +557,7 @@ bool CCoinsViewCache::UpdateScInfo(const CTransaction& tx, const CBlock& block, 
     // forward transfer ccout
     for(auto& ft: tx.vft_ccout)
     {
-        ScInfo targetScInfo;
-        if (!GetScInfo(ft.scId, targetScInfo))
+        if (!HaveScInfo(ft.scId))
         {
             // should not happen
             LogPrint("sc", "%s():%d - Can not update balance, could not find scId=%s\n",
@@ -569,12 +566,10 @@ bool CCoinsViewCache::UpdateScInfo(const CTransaction& tx, const CBlock& block, 
         }
 
         // add a new immature balance entry in sc info or increment it if already there
-        targetScInfo.mImmatureAmounts[maturityHeight] += ft.nValue;
         assert(cacheSidechains.count(ft.scId) != 0);
-        if (cacheSidechains[ft.scId].flag == CSidechainsCacheEntry::Flags::FRESH)
-            cacheSidechains[ft.scId] = CSidechainsCacheEntry(targetScInfo, CSidechainsCacheEntry::Flags::FRESH);
-        else
-            cacheSidechains[ft.scId] = CSidechainsCacheEntry(targetScInfo, CSidechainsCacheEntry::Flags::DIRTY);
+        cacheSidechains[ft.scId].scInfo.mImmatureAmounts[maturityHeight] += ft.nValue;
+        if (cacheSidechains[ft.scId].flag != CSidechainsCacheEntry::Flags::FRESH)
+            cacheSidechains[ft.scId].flag = CSidechainsCacheEntry::Flags::DIRTY;
 
         LogPrint("sc", "%s():%d - immature balance added in scView (h=%d, amount=%s) %s\n",
             __func__, __LINE__, maturityHeight, FormatMoney(ft.nValue), ft.scId.ToString());
