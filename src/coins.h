@@ -556,7 +556,7 @@ public:
     int getCertificateMaxIncomingHeight(const uint256& scId, int epochNumber);
     CAmount getSidechainBalance(const uint256& scId) const;
     bool UpdateScInfo(const CScCertificate& cert, CBlockUndo& bu);
-    bool RevertCertOutputs(const CScCertificate& cert, int nHeight);
+    bool RevertCertOutputs(const CScCertificate& cert);
 
     bool Flush();
 
@@ -593,8 +593,6 @@ private:
     CCoinsMap::iterator FetchCoins(const uint256 &txid);
     CCoinsMap::const_iterator FetchCoins(const uint256 &txid) const;
     CSidechainsMap::const_iterator FetchSidechains(const uint256& scId) const;
-    bool hasScCreationOutput(const CTransaction& tx, const uint256& scId);
-
     static int getInitScCoinsMaturity();
     int getScCoinsMaturity();
 

@@ -149,7 +149,7 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry,
     }
 
     for(const auto& fwd: tx.vft_ccout) {
-        mapSidechains[fwd.scId].CcTransfersSet.insert(hash);
+        mapSidechains[fwd.scId].fwdTransfersSet.insert(hash);
     }
 
     nTransactionsUpdated++;
@@ -165,11 +165,11 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CCertificateMemPoolEntr
 {
     LOCK(cs);
     mapCertificate[hash] = entry;
-    // no mapNextTx or mapNullifiers handling is necessary for certs since they have no inputs or joinsplits 
 
-    const CScCertificate& cert = mapCertificate[hash].GetCertificate();
+    const CScCertificate& cert = entry.GetCertificate();
 
-    mapSidechains[cert.scId].CcTransfersSet.insert(hash);
+    assert(mapSidechains[cert.scId].backwardCertificate.IsNull());
+    mapSidechains[cert.scId].backwardCertificate = hash;
            
     LogPrint("sc", "%s():%d - cert [%s] added in mapSidechains for sc [%s]\n",
         __func__, __LINE__, hash.ToString(), cert.scId.ToString() );
@@ -207,7 +207,7 @@ void CTxMemPool::remove(const CTransaction &origTx, std::list<CTransaction>& rem
                     continue;
 
                 if (removeDependantFwds) {
-                    for(const auto& fwdTxHash : mapSidechains.at(sc.scId).CcTransfersSet)
+                    for(const auto& fwdTxHash : mapSidechains.at(sc.scId).fwdTransfersSet)
                         objToRemove.push_back(fwdTxHash);
                 } else
                     objToRemove.push_back(mapSidechains.at(sc.scId).scCreationTxHash);
@@ -248,10 +248,13 @@ void::CTxMemPool::removeInternal(
                         continue;
 
                     if (removeDependantFwds) {
-                        for(const auto& ccObjHash : mapSidechains.at(sc.scId).CcTransfersSet)
+                        for(const auto& ccObjHash : mapSidechains.at(sc.scId).fwdTransfersSet)
                             objToRemove.push_back(ccObjHash);
                     } else
                         objToRemove.push_back(mapSidechains.at(sc.scId).scCreationTxHash);
+
+                    //no backward cert for unconfirmed sidechain can be in mempool
+                    assert(mapSidechains.at(sc.scId).backwardCertificate.IsNull());
                 }
             }
 
@@ -264,21 +267,20 @@ void::CTxMemPool::removeInternal(
             }
 
             for(const auto& fwd: tx.vft_ccout) {
-                if (mapSidechains.count(fwd.scId)) { //this should be redundant. tx is guaranteed to be in mempool here, and any fwd tx should also be in mapSidechains
-                    mapSidechains.at(fwd.scId).CcTransfersSet.erase(tx.GetHash());
+                if (mapSidechains.count(fwd.scId)) { //Guard against double-delete on multiple fwds toward the same sc in same tx
+                    mapSidechains.at(fwd.scId).fwdTransfersSet.erase(tx.GetHash());
 
-                    if (mapSidechains.at(fwd.scId).CcTransfersSet.size() == 0 && mapSidechains.at(fwd.scId).scCreationTxHash.IsNull())
+                    if (mapSidechains.at(fwd.scId).fwdTransfersSet.size() == 0 && mapSidechains.at(fwd.scId).scCreationTxHash.IsNull())
                         mapSidechains.erase(fwd.scId);
                 }
             }
 
             for(const auto& sc: tx.vsc_ccout) {
-                if (mapSidechains.count(sc.scId)) { //this should be redundant. tx is guaranteed to be in mempool here, and any sc tx should also be in mapSidechains
-                    mapSidechains.at(sc.scId).scCreationTxHash.SetNull();
-                                                                
-                    if (mapSidechains.at(sc.scId).CcTransfersSet.size() == 0)
-                        mapSidechains.erase(sc.scId);
-                }
+                assert(mapSidechains.count(sc.scId) != 0);
+                mapSidechains.at(sc.scId).scCreationTxHash.SetNull();
+
+                if (mapSidechains.at(sc.scId).fwdTransfersSet.size() == 0)
+                    mapSidechains.erase(sc.scId);
             }
 
             removedTxs.push_back(tx);
@@ -291,8 +293,7 @@ void::CTxMemPool::removeInternal(
             nTransactionsUpdated++;
             minerPolicyEstimator->removeTx(hash);
         }
-        else
-        if (mapCertificate.count(hash))
+        else if (mapCertificate.count(hash))
         {
             const CScCertificate& cert = mapCertificate[hash].GetCertificate();
             if (fRecursive)
@@ -305,19 +306,9 @@ void::CTxMemPool::removeInternal(
                 }
             }
 
-            if (mapSidechains.count(cert.scId))
-            {
-                LogPrint("sc", "%s():%d - erasing cert [%s] in mapSidechains for sc [%s]\n",
-                    __func__, __LINE__, hash.ToString(), cert.scId.ToString() );
-                mapSidechains.at(cert.scId).CcTransfersSet.erase(hash);
-
-                if (mapSidechains.at(cert.scId).CcTransfersSet.size() == 0 && mapSidechains.at(cert.scId).scCreationTxHash.IsNull())
-                {
-                    LogPrint("sc", "%s():%d - removing mapSidechains entry for sc [%s]\n",
-                        __func__, __LINE__, cert.scId.ToString() );
-                    mapSidechains.erase(cert.scId);
-                }
-            }
+            mapSidechains.at(cert.scId).backwardCertificate.SetNull();
+            if (mapSidechains.at(cert.scId).fwdTransfersSet.size() == 0 && mapSidechains.at(cert.scId).scCreationTxHash.IsNull())
+                mapSidechains.erase(cert.scId);
 
             removedCerts.push_back(cert);
             totalTxSize -= mapCertificate[hash].GetCertificateSize();
@@ -325,8 +316,6 @@ void::CTxMemPool::removeInternal(
             LogPrint("cert", "%s():%d - removing cert [%s] from mempool\n", __func__, __LINE__, hash.ToString() );
             mapCertificate.erase(hash);
             nCertificatesUpdated++;
-// TODO cert: miner policy not handled for certificates
-//        minerPolicyEstimator->removeTx(hash);
         }
     }
 }
@@ -614,13 +603,16 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
 
             //since sc creation is in mempool, there must not be in blockchain another sc re-declaring it
             assert(!pcoins->HaveScInfo(scCreation.scId));
+
+            //there cannot be no certificates for unconfirmed sidechains
+            assert(mapSidechains.at(scCreation.scId).backwardCertificate.IsNull());
         }
 
         for(const auto& fwd: tx.vft_ccout) {
             //fwd must be duly recorded in mapSidechain
             assert(mapSidechains.count(fwd.scId) != 0);
-            const auto& fwdPos = mapSidechains.at(fwd.scId).CcTransfersSet.find(tx.GetHash());
-            assert(fwdPos != mapSidechains.at(fwd.scId).CcTransfersSet.end());
+            const auto& fwdPos = mapSidechains.at(fwd.scId).fwdTransfersSet.find(tx.GetHash());
+            assert(fwdPos != mapSidechains.at(fwd.scId).fwdTransfersSet.end());
 
             //there must be no dangling fwds, i.e. sc creation is either in mempool or in blockchain
             if (!mapSidechains.at(fwd.scId).scCreationTxHash.IsNull())
@@ -662,22 +654,15 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
 
     for (auto it = mapCertificate.begin(); it != mapCertificate.end(); it++)
     {
+        const auto& cert = it->second.GetCertificate();
+
+        //certificate must be duly recorded in mapSidechain
+        assert(mapSidechains.count(cert.scId) != 0);
+        assert(mapSidechains.at(cert.scId).backwardCertificate == cert.GetHash());
+
         checkTotal += it->second.GetCertificateSize();
         innerUsage += it->second.DynamicMemoryUsage();
-        const auto& cert = it->second.GetCertificate();
         CValidationState state;
-
-        //ABENEGIA: duplicated code here, while cleaning up class hyerarchy
-        for (auto it = mempool.mapCertificate.begin(); it != mempool.mapCertificate.end(); ++it)
-        {
-            const CScCertificate& loopCert = it->second.GetCertificate();
-
-            if ((loopCert.scId == cert.scId) && (loopCert.epochNumber == cert.epochNumber) && (loopCert.GetHash() != cert.GetHash()))
-            {
-                LogPrint("sc", "%s():%d - cert [%s] has conflicts in mempool\n", __func__, __LINE__, cert.GetHash().ToString());
-                assert(false);
-            }
-        } //ABENEGIA: end of duplicated code
 
         assert(cert.ContextualCheckInputs(state, mempoolDuplicate, false, chainActive, 0, false, Params().GetConsensus(), NULL));
         // updating coins with cert outputs because the cache is checked below for
@@ -879,19 +864,20 @@ bool CCoinsViewMemPool::GetScInfo(const uint256& scId, ScInfo& info) const {
                 info.creationTxHash = scCreationHash;
                 info.creationData.withdrawalEpochLength = scCreation.withdrawalEpochLength;
             }
+    } else if (!base->GetScInfo(scId, info))
+        return false;
 
-//        //ABENEGIA: THIS IS WRONG SINCE ALSO THE CERTIFICATE IS STORE IN CcTransfersSet and it should be subtracted
-//        //construct immature amount infos
-//        for (const auto& fwdHash: mempool.mapSidechains.at(scId).CcTransfersSet) {
-//            const CTransaction & fwdTx = mempool.mapTx.at(fwdHash).GetTx();
-//            for (const auto& fwdAmount : fwdTx.vft_ccout)
-//                if (scId == fwdAmount.scId)
-//                    info.mImmatureAmounts[-1] += fwdAmount.nValue;
-//        }
-        return true;
+    //decorate scInfo with fwds in mempool
+    if (mempool.mapSidechains.count(scId)) {
+        for (const auto& fwdHash: mempool.mapSidechains.at(scId).fwdTransfersSet) {
+            const CTransaction & fwdTx = mempool.mapTx.at(fwdHash).GetTx();
+            for (const auto& fwdAmount : fwdTx.vft_ccout)
+                if (scId == fwdAmount.scId)
+                    info.mImmatureAmounts[-1] += fwdAmount.nValue;
+        }
     }
 
-    return base->GetScInfo(scId, info);
+    return true;
 }
 
 bool CCoinsViewMemPool::HaveScInfo(const uint256& scId) const {
@@ -905,36 +891,26 @@ bool CCoinsViewMemPool::IsCertAllowedInMempool(const CScCertificate& cert, CVali
         return true;
 
     // when called for checking the contents of mempool we can find the certificate itself, which is OK
-    uint256 conflictingCertHash;
-    //ABENEGIA: duplicated code here, while cleaning up class hyerarchy
-    for (auto it = mempool.mapCertificate.begin(); it != mempool.mapCertificate.end(); ++it)
-    {
-        const CScCertificate& loopCert = it->second.GetCertificate();
+    if (mempool.mapSidechains.count(cert.scId)) {
+        const uint256 & conflictingCertHash = mempool.mapSidechains.at(cert.scId).backwardCertificate;
+        if (conflictingCertHash == cert.GetHash()) //This currently happens with mempool.check
+            return true;
 
-        if ((loopCert.scId == cert.scId) && (loopCert.epochNumber == cert.epochNumber))
-        {
-            conflictingCertHash = loopCert.GetHash();
-            break;
-        }
-    } //ABENEGIA: end of duplicated code
+        LogPrintf("ERROR: certificate %s for epoch %d is already in mempool\n",
+            conflictingCertHash.ToString(), cert.epochNumber);
+        return state.Invalid(error("A certificate with the same scId/epoch is already in mempool"),
+             REJECT_INVALID, "sidechain-certificate-epoch");
+    }
 
-    if (conflictingCertHash == cert.GetHash()) //This currently happens with mempool.check
-        return true;
-
-    LogPrintf("ERROR: certificate %s for epoch %d is already been issued\n",
-        conflictingCertHash.ToString(), cert.epochNumber); //ABENEGIA: a cert with nullHash can make it to mempool or db???
-    return state.Invalid(error("A certificate with the same scId/epoch is already issued"),
+    LogPrintf("ERROR: certificate for epoch %d is already confirmed\n",
+        cert.epochNumber);
+    return state.Invalid(error("A certificate with the same scId/epoch is already confirmed"),
          REJECT_INVALID, "sidechain-certificate-epoch");
 }
 
 bool CCoinsViewMemPool::HaveCertForEpoch(const uint256& scId, int epochNumber) const {
-
-    for (auto it = mempool.mapCertificate.begin(); it != mempool.mapCertificate.end(); ++it) {
-        const CScCertificate& mpCert = it->second.GetCertificate();
-
-        if ((mpCert.scId == scId) && (mpCert.epochNumber == epochNumber))
-            return true;
-    }
+    if ((mempool.mapSidechains.count(scId) != 0) && (!mempool.mapSidechains.at(scId).backwardCertificate.IsNull()))
+        return true;
 
     return base->HaveCertForEpoch(scId, epochNumber);
 }
