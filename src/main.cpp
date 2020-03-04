@@ -2647,11 +2647,13 @@ void static UpdateTip(CBlockIndex *pindexNew) {
         for (int bit = 0; bit < VERSIONBITS_NUM_BITS; bit++) {
             WarningBitsConditionChecker checker(bit);
             ThresholdState state = checker.GetStateFor(pindex, chainParams.GetConsensus(), warningcache[bit]);
+            LogPrintf("checker.GetStateFor returned state [%d] when executed on block [%s]\n", state, pindex->GetBlockHash().ToString() );
             if (state == THRESHOLD_ACTIVE || state == THRESHOLD_LOCKED_IN) {
                 if (state == THRESHOLD_ACTIVE) {
                     strMiscWarning = strprintf(_("Warning: unknown new rules activated (versionbit %i)"), bit);
                     if (!fWarned) {
                         CAlert::Notify(strMiscWarning, true);
+                        LogPrintf("checker.GetStateFor has just called CAlert::Notify\n");
                         fWarned = true;
                     }
                 } else {
@@ -3506,6 +3508,10 @@ bool CheckBlock(const CBlock& block, CValidationState& state,
     if (nSigOps > MAX_BLOCK_SIGOPS)
         return state.DoS(100, error("CheckBlock(): out-of-bounds SigOpCount"),
                          REJECT_INVALID, "bad-blk-sigops", true);
+
+    if (block.nVersion != 4 || block.nVersion != VERSIONBITS_TOP_BITS)
+        LogPrintf("Block [%s] at height [%d] passed %s with version [0x%x], time [%d]\n",
+                  block.GetHash().ToString(), chainActive.Height(), __func__, block.nVersion, block.nTime);
 
     return true;
 }
