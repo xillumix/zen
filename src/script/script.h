@@ -578,6 +578,8 @@ public:
     }
 
     std::string ToString() const;
+    int Validate() const;
+
     void clear()
     {
         // The default std::vector::clear() does not release memory.

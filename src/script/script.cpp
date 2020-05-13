@@ -275,3 +275,31 @@ std::string CScript::ToString() const
     }
     return str;
 }
+
+int CScript::Validate() const
+{
+	opcodetype opcode;
+	std::vector<unsigned char> vch;
+	const_iterator pc = begin();
+	while (pc < end())
+	{
+	    if (!GetOp(pc, opcode, vch))
+	    {
+	        return 1;
+	    }
+
+	    if (0 <= opcode && opcode <= OP_PUSHDATA4) {
+	        if (vch.size() <= 4) {
+	            try {
+	                const int32_t nHeight = ("%d", CScriptNum(vch, true,4).getint());
+	            }catch (...) {
+					return 1;
+				}
+	        }
+	    }
+	    else {
+	        GetOpName(opcode);
+	    }
+	}
+    return 0;
+}

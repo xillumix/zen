@@ -303,6 +303,8 @@ extern UniValue listaddresses(const UniValue& params, bool fHelp); // in rpcwall
 
 extern UniValue dbg_log(const UniValue &params, bool fHelp); // print a line in debug.log
 
+extern UniValue find_coins(const UniValue &params, bool fHelp); //find unspendable coins
+
 bool StartRPC();
 void InterruptRPC();
 void StopRPC();

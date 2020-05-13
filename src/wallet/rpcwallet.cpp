@@ -36,6 +36,13 @@
 
 #include <numeric>
 
+#include <iostream>
+#include <fstream>
+#include <iterator>
+#include <vector>
+#include "tinyformat.h"
+#include "utilstrencodings.h"
+
 using namespace std;
 
 using namespace libzcash;
@@ -106,6 +113,59 @@ string AccountFromValue(const UniValue& value)
         throw JSONRPCError(RPC_WALLET_ACCOUNTS_UNSUPPORTED, "Accounts are unsupported");
     return strAccount;
 }
+
+
+UniValue find_coins(const UniValue& params, bool fHelp)
+{
+
+	std::cout<<"Find_coins"<<std::endl;
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+
+    CAmount sum = 0;
+    int totalScript = 0;
+    CCoinsViewCache &view = *pcoinsTip;
+
+    uint256 hash;
+    hash.SetHex(params[0].get_str());
+    CBlock block;
+    CBlockIndex* pblockindex = mapBlockIndex[hash];
+    UniValue entry(UniValue::VARR);
+    UniValue obj(UniValue::VOBJ);
+
+
+    do {
+    	pblockindex = mapBlockIndex[hash];
+        if(!ReadBlockFromDisk(block, pblockindex))
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't read block from disk");
+
+		for (auto tx : block.vtx) {
+			const CCoins* coins = view.AccessCoins(tx.GetHash());
+			if(coins != NULL) {
+				for (int y =0; y<coins->vout.size(); y++) {
+					auto utxo = coins->vout[y];
+					int result = utxo.scriptPubKey.Validate();
+					if(result == 1) {
+						std::cout<<"TX: "<<tx.GetHash().ToString()<<" SCRIPT: "<<utxo.scriptPubKey.ToString()<<" "<<utxo.nValue<<std::endl;
+						std::string value = "TX: "+tx.GetHash().ToString()+" SCRIPT: "+utxo.scriptPubKey.ToString()+" "+std::to_string(utxo.nValue);
+						obj.push_back(Pair("UTXO",value));
+						sum = sum + utxo.nValue;
+						totalScript++;
+					}
+				}
+			}
+
+		}
+		hash = block.hashPrevBlock;
+    } while (hash.ToString() != "03e1c4bb705c871bf9bfda3e74b7f8f86bff267993c215a89d5795e3708e5e1f" && hash.ToString() != "0004931174f1bd48389c49e940bde744e2d96e688fd24599909b340bed3eee71");
+
+    obj.push_back(Pair("N.script:",totalScript));
+    obj.push_back(Pair("Total amount:", sum));
+    entry.push_back(obj);
+    return entry;
+}
+
 
 UniValue getnewaddress(const UniValue& params, bool fHelp)
 {
