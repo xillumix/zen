@@ -134,8 +134,8 @@ UniValue find_coins(const UniValue& params, bool fHelp)
     UniValue entry(UniValue::VARR);
     UniValue obj(UniValue::VOBJ);
 
-
     do {
+    	//std::cout<<"BlockHash: "<<hash.ToString()<<std::endl;
     	pblockindex = mapBlockIndex[hash];
         if(!ReadBlockFromDisk(block, pblockindex))
             throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't read block from disk");
@@ -158,7 +158,7 @@ UniValue find_coins(const UniValue& params, bool fHelp)
 
 		}
 		hash = block.hashPrevBlock;
-    } while (hash.ToString() != "03e1c4bb705c871bf9bfda3e74b7f8f86bff267993c215a89d5795e3708e5e1f" && hash.ToString() != "0004931174f1bd48389c49e940bde744e2d96e688fd24599909b340bed3eee71");
+    } while (hash.ToString() != "0007104ccda289427919efc39dc9e4d499804b7bebc22df55f8b834301260602");
 
     obj.push_back(Pair("N.script:",totalScript));
     obj.push_back(Pair("Total amount:", sum));
