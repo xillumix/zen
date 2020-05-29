@@ -141,6 +141,10 @@ private:
         const CTransactionBase& txBase, const CCoinsViewCache *pcoins, unsigned int nMemPoolHeight, 
         std::list<const CTransactionBase*>& transactionsToRemove);
 
+    std::map<uint256, const CTransactionBase*> mapRecentlyAddedTxBase;
+    uint64_t nRecentlyAddedSequence = 0;
+    uint64_t nNotifiedSequence = 0;
+
 public:
     mutable CCriticalSection cs;
     std::map<uint256, CTxMemPoolEntry> mapTx;
@@ -199,6 +203,9 @@ public:
     void PrioritiseTransaction(const uint256& hash, const std::string& strHash, double dPriorityDelta, const CAmount& nFeeDelta);
     void ApplyDeltas(const uint256& hash, double &dPriorityDelta, CAmount &nFeeDelta);
     void ClearPrioritisation(const uint256& hash);
+
+    void NotifyRecentlyAdded();
+    bool IsFullyNotified();
 
     unsigned long sizeTx()
     {

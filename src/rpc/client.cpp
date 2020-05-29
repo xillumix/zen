@@ -125,6 +125,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "z_sendmany", 1},
     { "z_sendmany", 2},
     { "z_sendmany", 3},
+	{ "z_sendmany", 4},
     { "sc_sendmany", 0},
     { "sc_create", 1 },
     { "sc_create", 3 },
