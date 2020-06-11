@@ -2260,6 +2260,16 @@ CCoins::outputMaturity CWalletTransactionBase::IsOutputMature(unsigned int vOutP
 
 CAmount CWalletTransactionBase::GetCredit(const isminefilter& filter) const
 {
+    bool areThereMatureOutputs = false;
+    for(unsigned int pos = 0; pos < pTxBase->GetVout().size(); ++pos)
+        if (GetBlocksToMaturity(pos) > 0)
+        {
+            areThereMatureOutputs = true;
+            break;
+        }
+
+    if (areThereMatureOutputs) return CAmount(0);
+
     int64_t credit = 0;
     if (filter & ISMINE_SPENDABLE) {
         // It used to be that GetBalance can assume transactions in mapWallet won't change
