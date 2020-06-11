@@ -391,7 +391,8 @@ public:
                            CAmount& nSent, CAmount& nFee, const isminefilter& filter) const;
 
     virtual bool HasMatureOutputs() const;
-    CCoins::outputMaturity IsOutputMature(unsigned int pos) const;
+    virtual int GetBlocksToMaturity(unsigned int vOutPos) const = 0;
+    CCoins::outputMaturity IsOutputMature(unsigned int vOutPos) const;
     CAmount GetCredit(const isminefilter& filter) const;
     CAmount GetImmatureCredit(bool fUseCache=true) const;
     CAmount GetImmatureWatchOnlyCredit(const bool& fUseCache=true) const;
@@ -506,6 +507,7 @@ public:
 
     void SetNoteData(mapNoteData_t &noteData) override;
 
+    int GetBlocksToMaturity(unsigned int vOutPos) const override final;
     void GetAmounts(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, std::list<CScOutputEntry>& listScSent,
         CAmount& nFee, std::string& strSentAccount, const isminefilter& filter) const override;
 
@@ -591,6 +593,7 @@ public:
         mapValue.erase("timesmart");
     }
 
+    int GetBlocksToMaturity(unsigned int vOutPos) const override final;
     void GetAmounts(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, std::list<CScOutputEntry>& listScSent,
         CAmount& nFee, std::string& strSentAccount, const isminefilter& filter) const override;
 

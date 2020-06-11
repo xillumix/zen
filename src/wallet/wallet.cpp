@@ -1794,6 +1794,18 @@ int CWalletTransactionBase::GetRequestCount() const
     return nRequests;
 }
 
+int CWalletTx::GetBlocksToMaturity(unsigned int vOutPos) const
+{
+    int nDepth = GetDepthInMainChain();
+    if (nDepth < 0)
+        return -1;
+
+    if (!IsCoinBase() == 0)
+        return 0;
+    else
+        return max(0, (COINBASE_MATURITY+1) - GetDepthInMainChain());
+}
+
 // GetAmounts will determine the transparent debits and credits for a given wallet tx.
 void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>& listSent, list<CScOutputEntry>& listScSent,
     CAmount& nFee, string& strSentAccount, const isminefilter& filter) const
@@ -4400,6 +4412,28 @@ CWalletCert& CWalletCert::operator=(const CWalletCert& rhs)
     return *this;
 }
 
+int CWalletCert::GetBlocksToMaturity(unsigned int vOutPos) const
+{
+    int nDepth = GetDepthInMainChain();
+    if (nDepth < 0)
+        return -1;
+
+    if (nDepth == 0)
+    {
+        if (!pTxBase->IsBackwardTransfer(vOutPos))
+            return 0;
+        else
+            return -1;
+    }
+
+    if (!pTxBase->IsBackwardTransfer(vOutPos))
+        return nDepth;
+
+    if (pTxBase->IsBackwardTransfer(vOutPos) && areBwtCeased)
+        return -1;
+
+    return bwtMaturityDepth - nDepth;
+}
 
 void CWalletCert::GetAmounts(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, std::list<CScOutputEntry>& listScSent,
     CAmount& nFee, std::string& strSentAccount, const isminefilter& filter) const
